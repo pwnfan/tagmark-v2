@@ -1,0 +1,4 @@
+{
+  "valid": ["HTTP.", "Café protocols.", "HTTP — 协议参考。", "\u0085HTTP.\ufeff"],
+  "blank": ["", " \t\r\n", "\u000b", "\u0085", "\u00a0", "\u2007", "\u2028\u2029", "\ufeff"]
+}

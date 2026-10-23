@@ -30,6 +30,22 @@ cargo run -- --collection collection.json save "https://example.com/article#intr
 cargo run -- --collection collection.json list
 ```
 
+管理页可创建英文标签、编辑短定义及独立的适用／排除／例子规则，并对每条收藏添加或明确拒绝某个标签。CLI 使用相同快照语义：
+
+```sh
+cargo run -- --collection collection.json tag-create "HTTP" --definition "The HTTP protocol." --inclusion "Resources about HTTP."
+cargo run -- --collection collection.json tags
+cargo run -- --collection collection.json tag-edit <tag-id> --exclusion "Incidental use of HTTP."
+cargo run -- --collection collection.json tag-add <bookmark-id> <tag-id>
+cargo run -- --collection collection.json tag-reject <bookmark-id> <tag-id>
+```
+
+标准名使用包含英文字母的可打印 ASCII，去除两端的空格、制表符、换行、回车和换页符并统一为小写；垂直制表符不接受。支持 `c++`、`c#`、`.net`、`http/2` 和含空格的名称。同名冲突显示错误，不合并标签。短定义不能只含 Unicode `White_Space` 字符或 BOM（U+FEFF）；有效文本原样保留。创建、编辑及 CLI 快照读取使用同一校验规则。
+
+短定义与各项规则分别记录人工来源、版本和保护；添加或拒绝按每个标签关联单独记录。未填写的规则保持未保护，保存未改变的字段不会增加版本。管理表单只提交用户实际编辑过的字段，刷新其他标签不会覆盖未保存的输入或把旧字段写回。重复收藏保留这些人工决定。标签改名／合并、解除保护和 AI 执行属于后续任务。
+
+快照的 `tags` 和收藏的 `tagAssignments` 为版本 1 的新增字段；旧快照缺失时按空集合读取。人工版本号范围为 1 至 9,007,199,254,740,991，达到上限时拒绝修改，避免两端数字精度不一致。管理页下载的快照包含标签、规则及人工保护，CLI `tags`／`list` 可读取核对。导出仍是完整私有状态。
+
 在 Chrome 的扩展程序页面开启开发者模式，加载 `apps/extension/.output/chrome-mv3` 目录。收藏缓存保存在插件自己的 IndexedDB 中；当前开发阶段尚未接通 GitHub 同步。
 
 URL 身份的共同样例位于 `fixtures/url-identity.json`，Rust 与 TypeScript 均读取它。浏览器测试使用独立的临时配置目录和实际构建的插件，不使用个人 Chrome 数据。

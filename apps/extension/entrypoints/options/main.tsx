@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import type { Bookmark, CollectionSnapshot } from "@tagmark/core";
-import { listBookmarks, saveBookmark } from "../../lib/collection";
+import type { Bookmark, Tag } from "@tagmark/core";
+import { collectionSnapshot, listBookmarks, listTags, saveBookmark } from "../../lib/collection";
+import { TagManager } from "./TagManager";
+import { BookmarkTags } from "./BookmarkTags";
 import "../../style.css";
 
 function Collection() {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
   const [url, setUrl] = useState("");
   const [title, setTitle] = useState("");
   const [error, setError] = useState("");
@@ -15,7 +18,7 @@ function Collection() {
   const [selected, setSelected] = useState(() => location.hash.startsWith("#bookmark-") ? location.hash.slice("#bookmark-".length) : "");
 
   useEffect(() => {
-    listBookmarks().then(setBookmarks).catch((error: unknown) => setError(String(error)))
+    collectionSnapshot().then((snapshot) => { setBookmarks(snapshot.bookmarks); setTags(snapshot.tags); }).catch((error: unknown) => setError(String(error)))
       .finally(() => setLoading(false));
   }, []);
 
@@ -55,7 +58,7 @@ function Collection() {
         <button className="secondary" disabled={loading} onClick={async () => {
           setError("");
           try {
-            const snapshot: CollectionSnapshot = { schemaVersion: 1, bookmarks: await listBookmarks() };
+            const snapshot = await collectionSnapshot();
             const url = URL.createObjectURL(new Blob([JSON.stringify(snapshot, null, 2) + "\n"], { type: "application/json" }));
             const download = document.createElement("a");
             download.href = url;
@@ -71,8 +74,10 @@ function Collection() {
         bookmarks.map((bookmark) => <article key={bookmark.id} id={`bookmark-${bookmark.id}`} tabIndex={-1}>
           <a href={bookmark.url} target="_blank" rel="noreferrer">{bookmark.title}</a>
           <p className="url">{bookmark.url}</p>
+          <BookmarkTags bookmark={bookmark} tags={tags} onChange={async () => setBookmarks(await listBookmarks())} onError={setError} onStatus={setStatus} />
         </article>)}
     </section>
+    <TagManager tags={tags} onChange={async () => setTags(await listTags())} onError={setError} onStatus={setStatus} />
   </main>;
 }
 

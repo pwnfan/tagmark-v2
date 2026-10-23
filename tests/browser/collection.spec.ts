@@ -156,3 +156,129 @@ test("the actual extension follows every shared URL identity example", async ({}
     await context.close();
   }
 });
+
+test("manual tag fields and decisions persist and match the CLI snapshot", async ({}, testInfo) => {
+  const profile = testInfo.outputPath("profile");
+  let collection = await openCollection(profile);
+  try {
+    let page = collection.page;
+    await expect(page.getByRole("button", { name: "Create tag", exact: true })).toBeVisible();
+    await page.getByLabel("URL", { exact: true }).fill("https://example.com/tags");
+    await page.getByLabel("Title", { exact: true }).fill("My resource");
+    await page.getByRole("button", { name: "Save bookmark", exact: true }).click();
+    const create = page.getByRole("form", { name: "Create tag" });
+    await create.getByLabel("English canonical name", { exact: true }).fill(" HTTP ");
+    await create.getByLabel("Short English definition", { exact: true }).fill("The HTTP protocol.");
+    await create.getByLabel("Inclusion", { exact: true }).fill("Resources about the protocol.");
+    await create.getByRole("button", { name: "Create tag", exact: true }).click();
+    const tag = page.getByRole("form", { name: "Edit tag http", exact: true });
+    await expect(tag).toBeVisible();
+    await create.getByLabel("English canonical name", { exact: true }).fill("HTTP");
+    await create.getByLabel("Short English definition", { exact: true }).fill("Different meaning.");
+    await create.getByRole("button", { name: "Create tag", exact: true }).click();
+    await expect(page.getByRole("alert")).toContainText("already exists");
+    await tag.getByLabel("Short English definition", { exact: true }).fill("Resources teaching HTTP.");
+    await tag.getByLabel("Exclusion", { exact: true }).fill("Incidental use of HTTP.");
+    await tag.getByRole("button", { name: "Save tag changes", exact: true }).click();
+    await expect(tag.getByText("Protected fields: Name, Definition, Inclusion, Exclusion", { exact: true })).toBeVisible();
+    const bookmark = page.locator("article");
+    await bookmark.getByLabel("Choose tag", { exact: true }).selectOption({ label: "http" });
+    await bookmark.getByRole("button", { name: "Add tag", exact: true }).click();
+    await expect(bookmark.getByText("http — added · protected", { exact: true })).toBeVisible();
+    await bookmark.getByRole("button", { name: "Reject tag", exact: true }).click();
+    await expect(bookmark.getByText("http — rejected · protected", { exact: true })).toBeVisible();
+    await page.getByLabel("URL", { exact: true }).fill("HTTPS://EXAMPLE.COM:443/tags");
+    await page.getByLabel("Title", { exact: true }).fill("Ignored");
+    await page.getByRole("button", { name: "Save bookmark", exact: true }).click();
+    await expect(page.getByRole("status").first()).toContainText("Already saved");
+    await collection.context.close();
+    collection = await openCollection(profile);
+    page = collection.page;
+    await expect(page.getByText("http — rejected · protected", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "My resource", exact: true })).toBeVisible();
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("button", { name: "Download local snapshot", exact: true }).click(),
+    ]);
+    const snapshotPath = testInfo.outputPath("collection.json");
+    await download.saveAs(snapshotPath);
+    const snapshot = JSON.parse(readFileSync(snapshotPath, "utf8"));
+    const cli = (path: string, args: string[]) => JSON.parse(execFileSync("cargo", ["run", "--quiet", "--", "--collection", path, ...args], { encoding: "utf8" }));
+    expect(cli(snapshotPath, ["tags"])).toEqual(snapshot.tags);
+    expect(cli(snapshotPath, ["list"])).toEqual(snapshot.bookmarks);
+    const cliPath = testInfo.outputPath("cli.json");
+    cli(cliPath, ["init"]);
+    const saved = cli(cliPath, ["save", "https://example.com/tags", "--title", "My resource"]);
+    const created = cli(cliPath, ["tag-create", " HTTP ", "--definition", "The HTTP protocol.", "--inclusion", "Resources about the protocol."]);
+    const edited = cli(cliPath, ["tag-edit", created.id, "--definition", "Resources teaching HTTP.", "--exclusion", "Incidental use of HTTP."]);
+    cli(cliPath, ["tag-add", saved.bookmark.id, created.id]);
+    const rejected = cli(cliPath, ["tag-reject", saved.bookmark.id, created.id]);
+    expect(snapshot.tags[0]).toEqual({ ...edited, id: snapshot.tags[0].id });
+    expect(snapshot.bookmarks[0]).toEqual({ ...rejected, id: snapshot.bookmarks[0].id,
+      tagAssignments: { [snapshot.tags[0].id]: rejected.tagAssignments[created.id] } });
+    await page.screenshot({ path: testInfo.outputPath("manual-tags.png"), fullPage: true });
+  } finally {
+    await collection.context.close();
+  }
+});
+
+test("two managers retain tag drafts and save only the fields the user edited", async ({}, testInfo) => {
+  const { context, page } = await openCollection(testInfo.outputPath("profile"));
+  try {
+    const create = page.getByRole("form", { name: "Create tag", exact: true });
+    await create.getByLabel("English canonical name", { exact: true }).fill("http");
+    await create.getByLabel("Short English definition", { exact: true }).fill("Original definition.");
+    await create.getByRole("button", { name: "Create tag", exact: true }).click();
+    const firstEditor = page.getByRole("form", { name: "Edit tag http", exact: true });
+    await expect(firstEditor).toBeVisible();
+    const other = await context.newPage();
+    await other.goto(page.url());
+    const secondEditor = other.getByRole("form", { name: "Edit tag http", exact: true });
+    await secondEditor.getByLabel("Short English definition", { exact: true }).fill("New manual definition.");
+    await secondEditor.getByRole("button", { name: "Save tag changes", exact: true }).click();
+    await expect(other.getByRole("status")).toContainText("Tag changes saved");
+
+    // Creating a different tag refreshes the first editor's props without reloading it.
+    await create.getByLabel("English canonical name", { exact: true }).fill("other");
+    await create.getByLabel("Short English definition", { exact: true }).fill("Another concept.");
+    await create.getByRole("button", { name: "Create tag", exact: true }).click();
+    await expect(page.getByRole("form", { name: "Edit tag other", exact: true })).toBeVisible();
+    await firstEditor.getByLabel("Exclusion", { exact: true }).fill("Exclude incidental use.");
+    await firstEditor.getByRole("button", { name: "Save tag changes", exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("Tag changes saved");
+    const downloadSnapshot = async (name: string) => {
+      const [download] = await Promise.all([
+        page.waitForEvent("download"),
+        page.getByRole("button", { name: "Download local snapshot", exact: true }).click(),
+      ]);
+      const path = testInfo.outputPath(name);
+      await download.saveAs(path);
+      return JSON.parse(readFileSync(path, "utf8"));
+    };
+    const snapshot = await downloadSnapshot("two-managers.json");
+    const tag = snapshot.tags.find((candidate: { canonicalName: string }) => candidate.canonicalName === "http");
+    expect(tag.definition).toBe("New manual definition.");
+    expect(tag.fieldState.definition).toEqual({ source: "manual", version: 2, protected: true });
+    expect(tag.rules.exclusion).toBe("Exclude incidental use.");
+
+    // A refresh must also retain unsaved input when another manager edits the same field.
+    await firstEditor.getByLabel("Inclusion", { exact: true }).fill("My unsaved inclusion.");
+    await secondEditor.getByLabel("Inclusion", { exact: true }).fill("Other manager inclusion.");
+    await secondEditor.getByRole("button", { name: "Save tag changes", exact: true }).click();
+    await expect(other.getByRole("status")).toContainText("Tag changes saved");
+    await create.getByLabel("English canonical name", { exact: true }).fill("third");
+    await create.getByLabel("Short English definition", { exact: true }).fill("Third concept.");
+    await create.getByRole("button", { name: "Create tag", exact: true }).click();
+    await expect(page.getByRole("form", { name: "Edit tag third", exact: true })).toBeVisible();
+    await expect(firstEditor.getByLabel("Inclusion", { exact: true })).toHaveValue("My unsaved inclusion.");
+    await expect(firstEditor.getByLabel("Short English definition", { exact: true })).toHaveValue("New manual definition.");
+    await firstEditor.getByRole("button", { name: "Save tag changes", exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("Tag changes saved");
+    const after = (await downloadSnapshot("two-managers-draft.json")).tags.find((candidate: { canonicalName: string }) => candidate.canonicalName === "http");
+    expect(after.rules.inclusion).toBe("My unsaved inclusion.");
+    expect(after.fieldState.definition).toEqual(tag.fieldState.definition);
+    expect(after.rules.exclusion).toBe(tag.rules.exclusion);
+  } finally {
+    await context.close();
+  }
+});

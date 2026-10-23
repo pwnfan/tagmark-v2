@@ -10,7 +10,7 @@ h2 { font-size: 18px; margin: 0 0 18px; }
 .intro { color: #52665f; margin: 0 0 28px; }
 form { padding: 24px; background: white; border: 1px solid #d8e2da; border-radius: 12px; }
 label { display: block; font-size: 14px; font-weight: 600; margin: 16px 0; }
-input { display: block; font: inherit; font-weight: 400; width: 100%; margin-top: 6px; padding: 11px 12px; border: 1px solid #aabcb2; border-radius: 6px; background: #fff; color: #18382c; }
+input, textarea, select { display: block; font: inherit; font-weight: 400; width: 100%; margin-top: 6px; padding: 11px 12px; border: 1px solid #aabcb2; border-radius: 6px; background: #fff; color: #18382c; }
 button { font: inherit; font-weight: 600; cursor: pointer; background: #245b44; color: white; border: 0; border-radius: 6px; padding: 11px 18px; }
 button:disabled { opacity: .6; cursor: wait; }
 button.secondary { font-size: 13px; color: #245b44; background: #e7eee8; padding: 8px 12px; }
@@ -31,3 +31,9 @@ article a { font-weight: 650; text-decoration-thickness: 1px; text-underline-off
 .popup h2 { overflow-wrap: anywhere; margin-bottom: 6px; }
 .popup button { margin-top: 24px; width: 100%; }
 .popup article { margin-bottom: 18px; }
+.tag-editor { margin: 24px 0 0; padding: 12px; border: 1px solid #d8e2da; border-radius: 12px; }
+.tag-editor legend { padding: 0 8px; font-weight: 700; }
+.tag-editor form { border: 0; }
+.tag-actions { display: flex; gap: 8px; margin-top: 16px; }
+textarea + button { margin-top: 16px; }
+.protection { color: #52665f; font-size: 13px; overflow-wrap: anywhere; }

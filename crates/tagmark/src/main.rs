@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use tagmark::{Collection, Result};
+use tagmark::{AssignmentState, Collection, Result};
 
 #[derive(Parser)]
 #[command(version, about = "Manage a private TagMark collection")]
@@ -25,6 +25,36 @@ enum Action {
     },
     /// List the saved bookmarks as JSON.
     List,
+    /// Create an English tag with its own definition and optional tagging rules.
+    TagCreate {
+        name: String,
+        #[arg(long)]
+        definition: String,
+        #[arg(long)]
+        inclusion: Option<String>,
+        #[arg(long)]
+        exclusion: Option<String>,
+        #[arg(long)]
+        examples: Option<String>,
+    },
+    /// List tags, definitions and their field protection as JSON.
+    Tags,
+    /// Manually add and protect one bookmark-tag association.
+    TagAdd { bookmark_id: String, tag_id: String },
+    /// Explicitly reject and protect one bookmark-tag association.
+    TagReject { bookmark_id: String, tag_id: String },
+    /// Edit only the supplied definition or rule fields, protecting each changed field.
+    TagEdit {
+        id: String,
+        #[arg(long)]
+        definition: Option<String>,
+        #[arg(long)]
+        inclusion: Option<String>,
+        #[arg(long)]
+        exclusion: Option<String>,
+        #[arg(long)]
+        examples: Option<String>,
+    },
 }
 
 fn write_collection(path: &Path, collection: &Collection, create: bool) -> Result<()> {
@@ -73,6 +103,58 @@ fn execute(cli: Cli) -> Result<()> {
             println!("{}", serde_json::to_string(&result)?);
         }
         Action::List => println!("{}", serde_json::to_string(&collection.bookmarks)?),
+        Action::Tags => println!("{}", serde_json::to_string(&collection.tags)?),
+        Action::TagAdd {
+            bookmark_id,
+            tag_id,
+        } => {
+            let bookmark = collection.assign_tag(&bookmark_id, &tag_id, AssignmentState::Added)?;
+            write_collection(&cli.collection, &collection, false)?;
+            println!("{}", serde_json::to_string(&bookmark)?);
+        }
+        Action::TagReject {
+            bookmark_id,
+            tag_id,
+        } => {
+            let bookmark =
+                collection.assign_tag(&bookmark_id, &tag_id, AssignmentState::Rejected)?;
+            write_collection(&cli.collection, &collection, false)?;
+            println!("{}", serde_json::to_string(&bookmark)?);
+        }
+        Action::TagEdit {
+            id,
+            definition,
+            inclusion,
+            exclusion,
+            examples,
+        } => {
+            let tag = collection.edit_tag(
+                &id,
+                definition.as_deref(),
+                inclusion.as_deref(),
+                exclusion.as_deref(),
+                examples.as_deref(),
+            )?;
+            write_collection(&cli.collection, &collection, false)?;
+            println!("{}", serde_json::to_string(&tag)?);
+        }
+        Action::TagCreate {
+            name,
+            definition,
+            inclusion,
+            exclusion,
+            examples,
+        } => {
+            let tag = collection.create_tag(
+                &name,
+                &definition,
+                inclusion.as_deref(),
+                exclusion.as_deref(),
+                examples.as_deref(),
+            )?;
+            write_collection(&cli.collection, &collection, false)?;
+            println!("{}", serde_json::to_string(&tag)?);
+        }
         Action::Init => unreachable!(),
     }
     Ok(())

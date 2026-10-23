@@ -1,0 +1,12 @@
+{
+  "valid": [
+    { "input": " Machine-Learning ", "expected": "machine-learning" },
+    { "input": "C++", "expected": "c++" },
+    { "input": "C#", "expected": "c#" },
+    { "input": ".NET", "expected": ".net" },
+    { "input": "HTTP/2", "expected": "http/2" },
+    { "input": "Machine Learning", "expected": "machine learning" },
+    { "input": "\t\n\f\r HTTP \t\n\f\r", "expected": "http" }
+  ],
+  "invalid": ["", "   ", "123", "机器学习", "Kelvin", "a\nb", "\ufeffhttp", "\u0085http", "\u000bHTTP", "HTTP\u000b"]
+}
