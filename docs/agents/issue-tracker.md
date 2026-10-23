@@ -24,9 +24,13 @@ Specs and tickets live in https://github.com/pwnfan/tagmark-v2/issues. Use the `
 
 The user approved a fixed baseline per ticket: T01 starts at `35e832b445a2e47d508ca65321f0177af4359974`; each later ticket pins the completed preceding ticket's commit before work begins. Review the ticket's change against that immutable commit and the relevant requirements in its parent spec. Record the chosen SHA with the implementation evidence.
 
+For parallel tickets, record each branch's starting commit. Before integrating a ticket, pin the then-current completed mainline commit, bring that ticket onto it, and use it as the final review baseline. This keeps the final review limited to that ticket while including interactions with already integrated work. Preserve both SHAs in the evidence when they differ.
+
 ## Ticket execution
 
 The main session coordinates tickets, checks evidence, manages reviews, and reports to the user. Starting with T02, delegate product coding and review fixes to a dedicated implementation subagent. Use high reasoning by default and medium for straightforward tickets. The current T01 may be completed by the main session.
+
+The user authorized parallel implementation. Use separate worktrees for ready tickets whose changes can be integrated coherently. Start with at most two implementation agents, leaving capacity for the two independent review axes when one implementation finishes. Integrate tickets one at a time; an implementation agent resolves any conflicts and verifies combined behavior before final review. Shared models and interfaces require coordination between their owners.
 
 Each implementation subagent reads the ticket, relevant domain decisions, and the `implement`, `tdd`, and `ponytail` skills. Apply ponytail throughout. Run one red-to-green behavior at a time at the four user-approved seams in the spec. Choose unit, integration, or browser tests according to the observable behavior; a per-function test suite is not required.
 

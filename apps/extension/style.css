@@ -37,3 +37,8 @@ article a { font-weight: 650; text-decoration-thickness: 1px; text-underline-off
 .tag-actions { display: flex; gap: 8px; margin-top: 16px; }
 textarea + button { margin-top: 16px; }
 .protection { color: #52665f; font-size: 13px; overflow-wrap: anywhere; }
+textarea { min-height: 90px; }
+input[type="checkbox"] { display: inline-block; width: auto; margin: 0 8px 0 0; }
+.actions { display: flex; gap: 12px; margin-top: 20px; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+article > button { margin-top: 14px; }

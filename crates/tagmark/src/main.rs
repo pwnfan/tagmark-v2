@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use tagmark::{AssignmentState, Collection, Result};
+use tagmark::{AssignmentState, BookmarkEdit, Collection, Result};
 
 #[derive(Parser)]
 #[command(version, about = "Manage a private TagMark collection")]
@@ -55,6 +55,26 @@ enum Action {
         #[arg(long)]
         examples: Option<String>,
     },
+    /// Edit only the supplied fields of an existing bookmark.
+    Edit {
+        id: String,
+        #[arg(long)]
+        url: Option<String>,
+        #[arg(long)]
+        title: Option<String>,
+        #[arg(long)]
+        private_note: Option<String>,
+        #[arg(long)]
+        description: Option<String>,
+        #[arg(long)]
+        body_excerpt: Option<String>,
+        #[arg(long, action = clap::ArgAction::Set)]
+        include_body: Option<bool>,
+        #[arg(long, action = clap::ArgAction::Set)]
+        skip_ai: Option<bool>,
+    },
+    /// Preview allowed AI input without sending it to a model (null when skipped).
+    AiEvidence { id: String },
 }
 
 fn write_collection(path: &Path, collection: &Collection, create: bool) -> Result<()> {
@@ -154,6 +174,39 @@ fn execute(cli: Cli) -> Result<()> {
             )?;
             write_collection(&cli.collection, &collection, false)?;
             println!("{}", serde_json::to_string(&tag)?);
+        }
+        Action::Edit {
+            id,
+            url,
+            title,
+            private_note,
+            description,
+            body_excerpt,
+            include_body,
+            skip_ai,
+        } => {
+            let result = collection.edit(
+                &id,
+                BookmarkEdit {
+                    url,
+                    title,
+                    private_note,
+                    description,
+                    body_excerpt,
+                    include_body,
+                    skip_ai,
+                },
+            )?;
+            write_collection(&cli.collection, &collection, false)?;
+            println!("{}", serde_json::to_string(&result)?);
+        }
+        Action::AiEvidence { id } => {
+            let bookmark = collection
+                .bookmarks
+                .iter()
+                .find(|bookmark| bookmark.id == id)
+                .ok_or("Bookmark not found")?;
+            println!("{}", serde_json::to_string(&bookmark.ai_evidence())?);
         }
         Action::Init => unreachable!(),
     }

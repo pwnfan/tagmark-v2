@@ -6,6 +6,6 @@ export default defineConfig({
   manifest: {
     name: "TagMark",
     description: "Save and organize your bookmarks.",
-    permissions: ["activeTab"],
+    permissions: ["activeTab", "scripting"],
   },
 });

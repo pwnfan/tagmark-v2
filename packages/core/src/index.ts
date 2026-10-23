@@ -3,6 +3,52 @@ export interface Bookmark {
   url: string;
   title: string;
   tagAssignments: Record<string, TagAssignment>;
+  privateNote: string;
+  evidence: { description: string; bodyExcerpt: string };
+  ai: { includeBody: boolean; skip: boolean };
+  fieldState: Record<string, ManualFieldState>;
+}
+
+export interface BookmarkEdit {
+  url?: string;
+  title?: string;
+  privateNote?: string;
+  description?: string;
+  bodyExcerpt?: string;
+  includeBody?: boolean;
+  skipAi?: boolean;
+}
+
+// Additive defaults keep snapshots and device caches created by T01 readable.
+export function bookmarkWithDefaults(bookmark: Pick<Bookmark, "id" | "url" | "title"> & Partial<Bookmark>): Bookmark {
+  for (const state of Object.values(bookmark.fieldState ?? {})) {
+    if (!Number.isSafeInteger(state.version) || state.version < 1) throw new Error("Field versions must be positive JavaScript-safe integers");
+  }
+  return { tagAssignments: {}, privateNote: "", evidence: { description: "", bodyExcerpt: "" }, ai: { includeBody: false, skip: false }, fieldState: {}, ...bookmark };
+}
+
+export function editBookmarkFields(bookmark: Bookmark, edit: BookmarkEdit): Bookmark {
+  const updated = structuredClone(bookmark);
+  function change<T extends object, K extends keyof T>(object: T, key: K, value: T[K] | undefined, path: string) {
+    if (value !== undefined && object[key] !== value) {
+      const version = nextManualVersion(updated.fieldState[path]?.version);
+      object[key] = value;
+      updated.fieldState[path] = { source: "manual", version, protected: true };
+    }
+  }
+  change(updated, "url", edit.url === undefined ? undefined : normalizeBookmarkUrl(edit.url), "url");
+  change(updated, "title", edit.title, "title");
+  change(updated, "privateNote", edit.privateNote, "privateNote");
+  change(updated.evidence, "description", edit.description, "evidence.description");
+  change(updated.evidence, "bodyExcerpt", edit.bodyExcerpt, "evidence.bodyExcerpt");
+  change(updated.ai, "includeBody", edit.includeBody, "ai.includeBody");
+  change(updated.ai, "skip", edit.skipAi, "ai.skip");
+  return updated;
+}
+
+export function aiEvidence(bookmark: Bookmark): { title: string; description: string; bodyExcerpt?: string } | null {
+  if (bookmark.ai.skip) return null;
+  return { title: bookmark.title, description: bookmark.evidence.description, ...(bookmark.ai.includeBody ? { bodyExcerpt: bookmark.evidence.bodyExcerpt } : {}) };
 }
 
 export interface CollectionSnapshot {
@@ -94,5 +140,6 @@ export function normalizeBookmarkUrl(input: string): string {
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new Error("Only HTTP(S) URLs can be saved");
   }
+  if (url.username || url.password) throw new Error("URLs containing credentials cannot be saved");
   return url.href;
 }

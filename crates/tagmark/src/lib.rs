@@ -82,6 +82,73 @@ pub struct Bookmark {
     pub title: String,
     #[serde(default)]
     pub tag_assignments: BTreeMap<String, TagAssignment>,
+    #[serde(default)]
+    pub private_note: String,
+    #[serde(default)]
+    pub field_state: BTreeMap<String, ManualFieldState>,
+    #[serde(default)]
+    pub evidence: PageEvidence,
+    #[serde(default)]
+    pub ai: AiPreferences,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PageEvidence {
+    pub description: String,
+    pub body_excerpt: String,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AiPreferences {
+    pub include_body: bool,
+    pub skip: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiEvidence<'a> {
+    pub title: &'a str,
+    pub description: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body_excerpt: Option<&'a str>,
+}
+
+#[derive(Default)]
+pub struct BookmarkEdit {
+    pub url: Option<String>,
+    pub title: Option<String>,
+    pub private_note: Option<String>,
+    pub description: Option<String>,
+    pub body_excerpt: Option<String>,
+    pub include_body: Option<bool>,
+    pub skip_ai: Option<bool>,
+}
+
+impl Bookmark {
+    pub fn ai_evidence(&self) -> Option<AiEvidence<'_>> {
+        if self.ai.skip {
+            return None;
+        }
+        Some(AiEvidence {
+            title: &self.title,
+            description: &self.evidence.description,
+            body_excerpt: self.ai.include_body.then_some(&self.evidence.body_excerpt),
+        })
+    }
+    fn record_edit(&mut self, field: &str) -> Result<()> {
+        let version = next_manual_version(self.field_state.get(field).map(|state| state.version))?;
+        self.field_state.insert(
+            field.into(),
+            ManualFieldState {
+                source: ManualSource::Manual,
+                version,
+                protected: true,
+            },
+        );
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -133,6 +200,13 @@ impl Collection {
         let mut ids = HashSet::new();
         let mut urls = HashSet::new();
         for bookmark in &self.bookmarks {
+            if bookmark
+                .field_state
+                .values()
+                .any(|state| state.version == 0 || state.version > MAX_MANUAL_VERSION)
+            {
+                return Err("Field versions must be positive JavaScript-safe integers".into());
+            }
             if Uuid::parse_str(&bookmark.id)?.to_string() != bookmark.id {
                 return Err("Bookmark IDs must be canonical UUIDs".into());
             }
@@ -322,6 +396,10 @@ impl Collection {
                 title.to_string()
             },
             url,
+            private_note: String::new(),
+            field_state: BTreeMap::new(),
+            evidence: PageEvidence::default(),
+            ai: AiPreferences::default(),
         };
         self.bookmarks.push(bookmark.clone());
         self.bookmarks.sort_by(|left, right| left.id.cmp(&right.id));
@@ -330,12 +408,72 @@ impl Collection {
             created: true,
         })
     }
+
+    pub fn edit(&mut self, id: &str, edit: BookmarkEdit) -> Result<Bookmark> {
+        let url = edit.url.as_deref().map(normalized_url).transpose()?;
+        if let Some(url) = &url
+            && self
+                .bookmarks
+                .iter()
+                .any(|bookmark| bookmark.id != id && bookmark.url == *url)
+        {
+            return Err("URL is already saved by another bookmark; nothing was changed".into());
+        }
+        let original = self
+            .bookmarks
+            .iter_mut()
+            .find(|bookmark| bookmark.id == id)
+            .ok_or("Bookmark not found")?;
+        let mut bookmark = original.clone();
+        for (field, value) in [
+            ("url", url),
+            ("title", edit.title),
+            ("privateNote", edit.private_note),
+            ("evidence.description", edit.description),
+            ("evidence.bodyExcerpt", edit.body_excerpt),
+        ] {
+            if let Some(value) = value {
+                let current = match field {
+                    "url" => &mut bookmark.url,
+                    "title" => &mut bookmark.title,
+                    "privateNote" => &mut bookmark.private_note,
+                    "evidence.description" => &mut bookmark.evidence.description,
+                    _ => &mut bookmark.evidence.body_excerpt,
+                };
+                if *current != value {
+                    *current = value;
+                    bookmark.record_edit(field)?;
+                }
+            }
+        }
+        for (field, value) in [
+            ("ai.includeBody", edit.include_body),
+            ("ai.skip", edit.skip_ai),
+        ] {
+            if let Some(value) = value {
+                let current = if field == "ai.includeBody" {
+                    &mut bookmark.ai.include_body
+                } else {
+                    &mut bookmark.ai.skip
+                };
+                if *current != value {
+                    *current = value;
+                    bookmark.record_edit(field)?;
+                }
+            }
+        }
+        *original = bookmark.clone();
+        Ok(bookmark)
+    }
 }
 
 fn normalized_url(input: &str) -> Result<String> {
     let parsed = Url::parse(input)?;
     if !matches!(parsed.scheme(), "http" | "https") {
         return Err("Only HTTP(S) URLs can be saved".into());
+    }
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err("URLs containing credentials cannot be saved".into());
     }
     Ok(parsed.to_string())
 }

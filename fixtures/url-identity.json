@@ -26,5 +26,5 @@
     { "left": "https://site.com/?a=1&a=2", "right": "https://site.com/?a=2&a=1", "same": false },
     { "left": "https://site.com:8443/test", "right": "https://site.com/test", "same": false }
   ],
-  "invalid": ["javascript:alert(1)", "data:text/plain,hello", "file:///test.html", "chrome://extensions/", "/relative", "example.com", "https://"]
+  "invalid": ["javascript:alert(1)", "data:text/plain,hello", "file:///test.html", "chrome://extensions/", "/relative", "example.com", "https://", "https://user:password@example.com/", "https://user@example.com/"]
 }

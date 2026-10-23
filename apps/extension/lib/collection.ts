@@ -1,5 +1,5 @@
-import { createManualTag, editManualTag, normalizeBookmarkUrl, setManualTagAssignment,
-  type Bookmark, type CollectionSnapshot, type SaveResult, type Tag, type TagAssignment, type TagEdit } from "@tagmark/core";
+import { bookmarkWithDefaults, editBookmarkFields, createManualTag, editManualTag, normalizeBookmarkUrl, setManualTagAssignment,
+  type Bookmark, type BookmarkEdit, type CollectionSnapshot, type SaveResult, type Tag, type TagAssignment, type TagEdit } from "@tagmark/core";
 
 const database = new Promise<IDBDatabase>((resolve, reject) => {
   const request = indexedDB.open("tagmark", 2);
@@ -23,12 +23,15 @@ export async function listBookmarks(): Promise<Bookmark[]> {
   const db = await database;
   return new Promise((resolve, reject) => {
     const request = db.transaction("bookmarks").objectStore("bookmarks").getAll();
-    request.onsuccess = () => resolve((request.result as Bookmark[]).map((bookmark) => ({ ...bookmark, tagAssignments: bookmark.tagAssignments ?? {} })));
+    request.onsuccess = () => {
+      try { resolve((request.result as Bookmark[]).map(bookmarkWithDefaults)); }
+      catch (error) { reject(error); }
+    };
     request.onerror = () => reject(request.error);
   });
 }
 
-export async function saveBookmark(inputUrl: string, title: string): Promise<SaveResult> {
+export async function saveBookmark(inputUrl: string, title: string, captured?: Pick<Bookmark, "evidence" | "ai">): Promise<SaveResult> {
   const url = normalizeBookmarkUrl(inputUrl);
   const db = await database;
   return new Promise((resolve, reject) => {
@@ -38,10 +41,9 @@ export async function saveBookmark(inputUrl: string, title: string): Promise<Sav
     const existing = bookmarks.index("url").get(url);
     existing.onsuccess = () => {
       if (existing.result) {
-        const bookmark = existing.result as Bookmark;
-        result = { bookmark: { ...bookmark, tagAssignments: bookmark.tagAssignments ?? {} }, created: false };
+        result = { bookmark: bookmarkWithDefaults(existing.result as Bookmark), created: false };
       } else {
-        const bookmark = { id: crypto.randomUUID(), url, title: title.trim() ? title : url, tagAssignments: {} };
+        const bookmark = bookmarkWithDefaults({ id: crypto.randomUUID(), url, title: title.trim() ? title : url, ...captured });
         bookmarks.add(bookmark);
         result = { bookmark, created: true };
       }
@@ -106,7 +108,7 @@ export async function assignTag(bookmarkId: string, tagId: string, state: TagAss
       const request = bookmarks.get(bookmarkId);
       request.onsuccess = () => {
         if (!request.result) { error = new Error("Bookmark not found"); transaction.abort(); return; }
-        result = setManualTagAssignment(request.result as Bookmark, tagId, state);
+        result = setManualTagAssignment(bookmarkWithDefaults(request.result as Bookmark), tagId, state);
         bookmarks.put(result);
       };
     };
@@ -121,9 +123,41 @@ export async function collectionSnapshot(): Promise<CollectionSnapshot> {
     const transaction = db.transaction(["bookmarks", "tags"]);
     const bookmarks = transaction.objectStore("bookmarks").getAll();
     const tags = transaction.objectStore("tags").getAll();
-    transaction.oncomplete = () => resolve({ schemaVersion: 1,
-      bookmarks: (bookmarks.result as Bookmark[]).map((bookmark) => ({ ...bookmark, tagAssignments: bookmark.tagAssignments ?? {} })),
-      tags: tags.result as Tag[] });
+    transaction.oncomplete = () => {
+      try {
+        resolve({ schemaVersion: 1, bookmarks: (bookmarks.result as Bookmark[]).map(bookmarkWithDefaults), tags: tags.result as Tag[] });
+      } catch (error) { reject(error); }
+    };
     transaction.onabort = () => reject(transaction.error ?? new Error("Snapshot could not be read"));
+  });
+}
+
+export async function editBookmark(id: string, edit: BookmarkEdit): Promise<Bookmark> {
+  const db = await database;
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction("bookmarks", "readwrite");
+    const bookmarks = transaction.objectStore("bookmarks");
+    let result: Bookmark;
+    let failure: Error | undefined;
+    const request = bookmarks.get(id);
+    request.onsuccess = () => {
+      try {
+        if (!request.result) throw new Error("Bookmark not found");
+        result = editBookmarkFields(bookmarkWithDefaults(request.result as Bookmark), edit);
+        const collision = bookmarks.index("url").get(result.url);
+        collision.onsuccess = () => {
+          if (collision.result && (collision.result as Bookmark).id !== id) {
+            failure = new Error("URL is already saved by another bookmark; nothing was changed");
+            transaction.abort();
+          } else bookmarks.put(result);
+        };
+      } catch (error) {
+        failure = error instanceof Error ? error : new Error("Bookmark could not be edited");
+        transaction.abort();
+      }
+    };
+    transaction.oncomplete = () => resolve(result);
+    transaction.onabort = () => reject(failure ?? transaction.error ?? new Error("Bookmark could not be edited"));
+    transaction.onerror = () => reject(transaction.error ?? new Error("Bookmark could not be edited"));
   });
 }

@@ -4,6 +4,7 @@ import type { Bookmark, Tag } from "@tagmark/core";
 import { collectionSnapshot, listBookmarks, listTags, saveBookmark } from "../../lib/collection";
 import { TagManager } from "./TagManager";
 import { BookmarkTags } from "./BookmarkTags";
+import { BookmarkEditor } from "../../lib/BookmarkEditor";
 import "../../style.css";
 
 function Collection() {
@@ -15,6 +16,7 @@ function Collection() {
   const [status, setStatus] = useState("");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState("");
   const [selected, setSelected] = useState(() => location.hash.startsWith("#bookmark-") ? location.hash.slice("#bookmark-".length) : "");
 
   useEffect(() => {
@@ -75,6 +77,12 @@ function Collection() {
           <a href={bookmark.url} target="_blank" rel="noreferrer">{bookmark.title}</a>
           <p className="url">{bookmark.url}</p>
           <BookmarkTags bookmark={bookmark} tags={tags} onChange={async () => setBookmarks(await listBookmarks())} onError={setError} onStatus={setStatus} />
+          {editing === bookmark.id ? <BookmarkEditor bookmark={bookmark} onCancel={() => setEditing("")} onSaved={async () => {
+            setBookmarks(await listBookmarks());
+            setEditing("");
+            setSelected(bookmark.id);
+            setStatus("Bookmark changes saved on this device.");
+          }} /> : <button className="secondary" onClick={() => setEditing(bookmark.id)}>Edit bookmark</button>}
         </article>)}
     </section>
     <TagManager tags={tags} onChange={async () => setTags(await listTags())} onError={setError} onStatus={setStatus} />

@@ -43,6 +43,162 @@ fn saved_bookmark_can_be_listed_after_the_process_restarts() {
 }
 
 #[test]
+fn edits_keep_identity_and_duplicate_saves_preserve_manual_content() {
+    let directory = tempfile::tempdir().unwrap();
+    let collection = directory.path().join("collection.json");
+    run(&collection, &["init"]);
+    let saved = run(&collection, &["save", "https://example.com/original"]);
+    let id = saved["bookmark"]["id"].as_str().unwrap();
+    run(
+        &collection,
+        &[
+            "edit",
+            id,
+            "--url",
+            "HTTPS://EXAMPLE.COM:443/edited",
+            "--title",
+            "My title",
+            "--private-note",
+            "Keep this private",
+        ],
+    );
+    let duplicate = run(
+        &collection,
+        &[
+            "save",
+            "https://example.com/edited",
+            "--title",
+            "Replacement",
+        ],
+    );
+    assert_eq!(duplicate["created"], false);
+    let listed = run(&collection, &["list"]);
+    assert_eq!(listed.as_array().unwrap().len(), 1);
+    assert_eq!(listed[0]["id"], id);
+    assert_eq!(listed[0]["url"], "https://example.com/edited");
+    assert_eq!(listed[0]["title"], "My title");
+    assert_eq!(listed[0]["privateNote"], "Keep this private");
+    assert_eq!(
+        listed[0]["fieldState"]["title"],
+        serde_json::json!({"source":"manual","version":1,"protected":true})
+    );
+    assert!(
+        listed[0]["fieldState"]
+            .get("evidence.description")
+            .is_none()
+    );
+}
+
+#[test]
+fn ai_evidence_is_an_explicit_projection_and_respects_persisted_choices() {
+    let directory = tempfile::tempdir().unwrap();
+    let collection = directory.path().join("collection.json");
+    run(&collection, &["init"]);
+    let saved = run(
+        &collection,
+        &["save", "https://example.com/", "--title", "Page title"],
+    );
+    let id = saved["bookmark"]["id"].as_str().unwrap();
+    run(
+        &collection,
+        &[
+            "edit",
+            id,
+            "--private-note",
+            "Private decision",
+            "--description",
+            "Page description",
+            "--body-excerpt",
+            "Allowed paragraph",
+        ],
+    );
+    assert_eq!(
+        run(&collection, &["ai-evidence", id]),
+        serde_json::json!({"title":"Page title","description":"Page description"})
+    );
+    run(&collection, &["edit", id, "--include-body", "true"]);
+    assert_eq!(
+        run(&collection, &["ai-evidence", id]),
+        serde_json::json!({"title":"Page title","description":"Page description","bodyExcerpt":"Allowed paragraph"})
+    );
+    run(&collection, &["edit", id, "--skip-ai", "true"]);
+    assert_eq!(run(&collection, &["ai-evidence", id]), Value::Null);
+    let bookmark = &run(&collection, &["list"])[0];
+    assert_eq!(
+        bookmark["ai"],
+        serde_json::json!({"includeBody":true,"skip":true})
+    );
+    assert_eq!(bookmark["evidence"]["bodyExcerpt"], "Allowed paragraph");
+    assert_eq!(bookmark["privateNote"], "Private decision");
+    run(
+        &collection,
+        &["edit", id, "--skip-ai", "false", "--include-body", "false"],
+    );
+    assert_eq!(
+        run(&collection, &["ai-evidence", id]),
+        serde_json::json!({"title":"Page title","description":"Page description"})
+    );
+}
+
+#[test]
+fn invalid_or_colliding_edits_leave_the_entire_snapshot_unchanged() {
+    let directory = tempfile::tempdir().unwrap();
+    let collection = directory.path().join("collection.json");
+    run(&collection, &["init"]);
+    let saved = run(&collection, &["save", "https://example.com/first"]);
+    run(&collection, &["save", "https://example.com/second"]);
+    let id = saved["bookmark"]["id"].as_str().unwrap();
+    let original = std::fs::read(&collection).unwrap();
+    for url in [
+        "HTTPS://EXAMPLE.COM:443/second",
+        "javascript:alert(1)",
+        "https://user:password@example.com/",
+    ] {
+        let output = Command::new(env!("CARGO_BIN_EXE_tagmark"))
+            .arg("--collection")
+            .arg(&collection)
+            .args(["edit", id, "--url", url, "--title", "Must not change"])
+            .output()
+            .unwrap();
+        assert!(!output.status.success(), "Invalid edit accepted: {url}");
+        assert_eq!(std::fs::read(&collection).unwrap(), original);
+    }
+}
+
+#[test]
+fn field_versions_are_exact_in_javascript_and_exhaustion_cannot_partially_edit() {
+    let directory = tempfile::tempdir().unwrap();
+    let collection = directory.path().join("collection.json");
+    let id = "2c60f487-b591-41ba-9821-18c61f38abf3";
+    for version in [0_u64, 9_007_199_254_740_991, 9_007_199_254_740_992] {
+        let original = serde_json::to_vec(&serde_json::json!({"schemaVersion":1,"bookmarks":[{
+            "id":id,"url":"https://example.com/","title":"Original",
+            "fieldState":{"title":{"source":"manual","version":version,"protected":true}}
+        }]}))
+        .unwrap();
+        std::fs::write(&collection, &original).unwrap();
+        let output = Command::new(env!("CARGO_BIN_EXE_tagmark"))
+            .arg("--collection")
+            .arg(&collection)
+            .args([
+                "edit",
+                id,
+                "--url",
+                "https://example.com/changed",
+                "--title",
+                "Changed",
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            !output.status.success(),
+            "Invalid/exhausted version accepted: {version}"
+        );
+        assert_eq!(std::fs::read(&collection).unwrap(), original);
+    }
+}
+
+#[test]
 fn an_unknown_snapshot_version_is_not_overwritten() {
     let directory = tempfile::tempdir().unwrap();
     let collection = directory.path().join("collection.json");
