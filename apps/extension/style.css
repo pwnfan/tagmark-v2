@@ -1,0 +1,33 @@
+:root { font: 16px/1.5 system-ui, sans-serif; color: #1b3430; background: #f6f8f5; color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { max-width: 820px; margin: 0 auto; padding: 36px 24px 64px; }
+header, .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.brand { font-size: 20px; font-weight: 750; letter-spacing: -0.6px; }
+.badge { font-size: 12px; color: #3e6258; background: #e7eee8; border-radius: 20px; padding: 5px 10px; }
+h1 { font-size: 34px; letter-spacing: -1px; margin: 40px 0 6px; }
+h2 { font-size: 18px; margin: 0 0 18px; }
+.intro { color: #52665f; margin: 0 0 28px; }
+form { padding: 24px; background: white; border: 1px solid #d8e2da; border-radius: 12px; }
+label { display: block; font-size: 14px; font-weight: 600; margin: 16px 0; }
+input { display: block; font: inherit; font-weight: 400; width: 100%; margin-top: 6px; padding: 11px 12px; border: 1px solid #aabcb2; border-radius: 6px; background: #fff; color: #18382c; }
+button { font: inherit; font-weight: 600; cursor: pointer; background: #245b44; color: white; border: 0; border-radius: 6px; padding: 11px 18px; }
+button:disabled { opacity: .6; cursor: wait; }
+button.secondary { font-size: 13px; color: #245b44; background: #e7eee8; padding: 8px 12px; }
+:focus-visible { outline: 3px solid #d28e21; outline-offset: 3px; }
+[role="alert"] { color: #9a2c20; }
+[role="status"] { min-height: 24px; color: #245b44; }
+.section-heading { margin-top: 32px; border-bottom: 1px solid #d8e2da; padding-bottom: 12px; }
+.section-heading h2 { margin: 0; }
+.section-heading span { color: #52665f; font-size: 14px; }
+article { padding: 20px 8px; border-bottom: 1px solid #d8e2da; border-radius: 3px; }
+a { color: #205b44; overflow-wrap: anywhere; }
+article a { font-weight: 650; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.url { color: #52665f; font-size: 13px; margin: 6px 0 0; overflow-wrap: anywhere; }
+.empty { color: #52665f; padding: 20px 0; }
+.popup { width: 360px; }
+.popup main { padding: 24px; }
+.popup h1 { font-size: 26px; margin: 24px 0; }
+.popup h2 { overflow-wrap: anywhere; margin-bottom: 6px; }
+.popup button { margin-top: 24px; width: 100%; }
+.popup article { margin-bottom: 18px; }

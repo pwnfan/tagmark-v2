@@ -1,0 +1,30 @@
+{
+  "normalizations": [
+    { "input": "HTTPS://SITE.COM:443", "expected": "https://site.com/" },
+    { "input": "http://SITE.com:80", "expected": "http://site.com/" },
+    { "input": "https://site.com/a/./b/../c", "expected": "https://site.com/a/c" },
+    { "input": "https://site.com/Test/?b=2&a=1#aaa", "expected": "https://site.com/Test/?b=2&a=1#aaa" },
+    { "input": "https://site.com/test?", "expected": "https://site.com/test?" },
+    { "input": "https://site.com/test#", "expected": "https://site.com/test#" },
+    { "input": "https://site.com/%7Ealice/a%2fb", "expected": "https://site.com/%7Ealice/a%2fb" },
+    { "input": "https://bücher.example/", "expected": "https://xn--bcher-kva.example/" }
+  ],
+  "pairs": [
+    { "left": "HTTPS://SITE.COM/test", "right": "https://site.com:443/test", "same": true },
+    { "left": "https://site.com", "right": "https://site.com/", "same": true },
+    { "left": "https://site.com/a/./b/../c", "right": "https://site.com/a/c", "same": true },
+    { "left": "http://site.com/test", "right": "https://site.com/test", "same": false },
+    { "left": "https://site.com/test#aaa", "right": "https://site.com/test#bbb", "same": false },
+    { "left": "https://site.com/Test", "right": "https://site.com/test", "same": false },
+    { "left": "https://site.com/test", "right": "https://site.com/test/", "same": false },
+    { "left": "https://site.com/?a=1&b=2", "right": "https://site.com/?b=2&a=1", "same": false },
+    { "left": "https://site.com/test", "right": "https://site.com/test?", "same": false },
+    { "left": "https://site.com/test", "right": "https://site.com/test#", "same": false },
+    { "left": "https://site.com/%7Ealice", "right": "https://site.com/~alice", "same": false },
+    { "left": "https://site.com/a%2fb", "right": "https://site.com/a%2Fb", "same": false },
+    { "left": "https://site.com/a%2Fb", "right": "https://site.com/a/b", "same": false },
+    { "left": "https://site.com/?a=1&a=2", "right": "https://site.com/?a=2&a=1", "same": false },
+    { "left": "https://site.com:8443/test", "right": "https://site.com/test", "same": false }
+  ],
+  "invalid": ["javascript:alert(1)", "data:text/plain,hello", "file:///test.html", "chrome://extensions/", "/relative", "example.com", "https://"]
+}

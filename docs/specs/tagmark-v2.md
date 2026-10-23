@@ -2,7 +2,7 @@
 
 日期：2026-10-23。
 
-状态：产品范围及本文四组测试边界均已获用户确认。本文按 to-spec 汇总既有决定，已发布为 [Spec #1](https://github.com/pwnfan/tagmark-v2/issues/1) 并标记 ready-for-agent。项目技能配置已获确认并写入；当前进入 to-tickets 拆分审阅，尚未开始产品实现。
+状态：产品范围及本文四组测试边界均已获用户确认。本文按 to-spec 汇总既有决定，已发布为 [Spec #1](https://github.com/pwnfan/tagmark-v2/issues/1) 并标记 ready-for-agent。用户已批准 30 张纵向 tickets，子 Issues #2–#31 及原生阻塞关系已建立；当前进入实现。
 
 ## Problem Statement
 
@@ -207,4 +207,4 @@ AI 可以自动分配标签并新增必要标签及定义，所有生成任务�
 - 本规范与设计访谈、术语及 ADR 互补；后续产品变更应同步相关决定，不能仅在 ticket 内悄悄改变已接受的行为。
 - 产品范围、测试边界、GitHub Issues 跟踪方式和五个默认分流标签均已获确认；项目采用 AGENTS.md 作为代理指引入口。
 - 本规范作为父 Spec，由 to-tickets 按可独立演示的纵向功能切片拆分并标注真正的阻塞依赖；拆分须经用户审阅。此前五阶段是范围分组，不作为按技术层分割的 tickets。
-- 后续实施按 implement 的 TDD 方式推进，审查分别检查项目标准与 Spec，完成后做环境与流程 retro；当前没有产品实现或真实集成测试结果。
+- 实施按 implement 的 TDD 方式推进，审查分别检查项目标准与 Spec，完成后做环境与流程 retro；当前进度与验证证据以子 tickets 为准，未执行的真实集成保留待验收状态。

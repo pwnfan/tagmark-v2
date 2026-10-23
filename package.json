@@ -1,0 +1,21 @@
+{
+  "name": "tagmark-v2",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present && tsc --noEmit -p tsconfig.tests.json",
+    "build": "npm run build --workspaces --if-present",
+    "test:core": "node --test packages/core/tests/*.test.ts",
+    "test:browser": "playwright test",
+    "test": "npm run test:core && npm run test:browser",
+    "check": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace && npm run typecheck && npm run build && npm test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/node": "^24.0.0",
+    "typescript": "7.0.2"
+  }
+}

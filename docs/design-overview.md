@@ -1,6 +1,6 @@
 # TagMark V2 设计总览与验收清单
 
-日期：2026-10-23。用户已在 Q48 确认更新后的设计。后续明确采用 grill-with-docs → to-spec → to-tickets → implement → code-review → retro 工作流。测试边界及项目技能配置已确认，规范已发布为 [Spec #1](https://github.com/pwnfan/tagmark-v2/issues/1)；当前进入 tickets 拆分审阅，尚未开始产品编码。完整规范见[开发规范](specs/tagmark-v2.md)。
+日期：2026-10-23。用户已在 Q48 确认更新后的设计。后续明确采用 grill-with-docs → to-spec → to-tickets → implement → code-review → retro 工作流。测试边界及项目技能配置已确认，规范已发布为 [Spec #1](https://github.com/pwnfan/tagmark-v2/issues/1)；30 张纵向 tickets 已获批准并发布为子 Issues #2–#31，当前进入实现。完整规范见[开发规范](specs/tagmark-v2.md)。
 
 ## 首版要完成的用户流程
 

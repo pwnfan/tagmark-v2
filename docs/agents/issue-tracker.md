@@ -20,6 +20,18 @@ Specs and tickets live in https://github.com/pwnfan/tagmark-v2/issues. Use the `
 - If native relationships are unavailable, preserve them in issue bodies with `Part of #<parent>` and `Blocked by: #<blocker>` and report the fallback.
 - Work only on tickets whose blockers are closed. A ready-for-agent label does not remove a blocking edge. Do not close or rewrite the parent Spec Issue while performing ticket decomposition.
 
+## Review baseline
+
+The user approved a fixed baseline per ticket: T01 starts at `35e832b445a2e47d508ca65321f0177af4359974`; each later ticket pins the completed preceding ticket's commit before work begins. Review the ticket's change against that immutable commit and the relevant requirements in its parent spec. Record the chosen SHA with the implementation evidence.
+
+## Ticket execution
+
+The main session coordinates tickets, checks evidence, manages reviews, and reports to the user. Starting with T02, delegate product coding and review fixes to a dedicated implementation subagent. Use high reasoning by default and medium for straightforward tickets. The current T01 may be completed by the main session.
+
+Each implementation subagent reads the ticket, relevant domain decisions, and the `implement`, `tdd`, and `ponytail` skills. Apply ponytail throughout. Run one red-to-green behavior at a time at the four user-approved seams in the spec. Choose unit, integration, or browser tests according to the observable behavior; a per-function test suite is not required.
+
+Deliver one cohesive final commit per ticket, with its behavior tests. Keep a checkpoint commit local for the Standards and Spec reviews; fold review fixes into that unpublished commit. Run the affected checks again, report the separate review axes, and conduct `retro` before publishing the ticket's completion evidence. Close a ticket only when its acceptance criteria are demonstrated. Preserve pending external acceptance checks explicitly.
+
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.**

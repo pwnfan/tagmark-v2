@@ -1,6 +1,6 @@
 # TagMark V2 核心、CLI 与 Codex 的执行工作流
 
-日期：2026-10-23。用途：解释核心、CLI 和 AI 的工作流。已选择 Rust 核心/CLI、本机 codex exec 调试及 DeepSeek 官方 deepseek-flash HTTP 路径。调试使用 20 条样本，DeepSeek 总预算为 2 元；尚未实现任何程序或执行付费调用。
+日期：2026-10-23。用途：解释核心、CLI 和 AI 的工作流。已选择 Rust 核心/CLI、本机 codex exec 调试及 DeepSeek 官方 deepseek-flash HTTP 路径。调试使用 20 条样本，DeepSeek 总预算为 2 元；基础离线收藏已开始实现，AI 路径尚待实施，尚未执行付费调用。
 
 ## 核心与 CLI 各做什么
 

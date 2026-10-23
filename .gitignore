@@ -1,1 +1,9 @@
 .scratch/
+target/
+node_modules/
+.wxt/
+.output/
+test-results/
+playwright-report/
+/collection.json
+/collection.json.lock

@@ -233,3 +233,7 @@ Q38 最终选择：Actions 临时包部署 Pages，不把收藏数据提交到�
 用户确认四组测试边界，并授权创建新代码仓库采用 GitHub Issues。已创建公开代码仓库 pwnfan/tagmark-v2，启用 Issues；用户接受五个默认分流标签，并审阅配置草稿后选择创建 AGENTS.md。项目继续采用根 GLOSSARY.md 与 docs/adr/ 的单一领域布局。
 
 规范已发布为 [Spec #1](https://github.com/pwnfan/tagmark-v2/issues/1)，标记 ready-for-agent；核对远端正文与本地规范一致，包含 84 条用户故事。当前进入 to-tickets：先审阅纵向功能切片及阻塞关系，获批后发布子 Issues，再按 implement、code-review、retro 推进。尚未编写产品代码。
+
+## Tickets 获批与实施分工
+
+用户审阅并批准 30 张纵向 tickets，已建立子 Issues #2–#31 及其原生阻塞关系，开始 T01 的实现。用户随后选择逐票固定审查基线，并补充主会话调度、专属 subagent 编码、high／medium 推理档位、ponytail 约束及每票一个最终 commit 的执行方式；T01 可由主会话收尾。当前执行规则统一记录在[任务跟踪指引](agents/issue-tracker.md)，测试仍使用已确认的四组行为边界。

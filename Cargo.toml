@@ -1,0 +1,3 @@
+[workspace]
+members = ["crates/tagmark"]
+resolver = "3"
