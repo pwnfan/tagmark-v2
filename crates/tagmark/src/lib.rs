@@ -81,6 +81,8 @@ pub struct Bookmark {
     pub url: String,
     pub title: String,
     #[serde(default)]
+    pub deleted: bool,
+    #[serde(default)]
     pub tag_assignments: BTreeMap<String, TagAssignment>,
     #[serde(default)]
     pub private_note: String,
@@ -200,6 +202,9 @@ impl Collection {
         let mut ids = HashSet::new();
         let mut urls = HashSet::new();
         for bookmark in &self.bookmarks {
+            if bookmark.deleted && !bookmark.field_state.contains_key("deleted") {
+                return Err("Deleted bookmarks require a deletion version".into());
+            }
             if bookmark
                 .field_state
                 .values()
@@ -388,6 +393,7 @@ impl Collection {
             });
         }
         let bookmark = Bookmark {
+            deleted: false,
             tag_assignments: BTreeMap::new(),
             id: Uuid::new_v4().to_string(),
             title: if title.trim().is_empty() {
@@ -407,6 +413,19 @@ impl Collection {
             bookmark,
             created: true,
         })
+    }
+
+    pub fn set_deleted(&mut self, id: &str, deleted: bool) -> Result<Bookmark> {
+        let bookmark = self
+            .bookmarks
+            .iter_mut()
+            .find(|bookmark| bookmark.id == id)
+            .ok_or("Bookmark not found")?;
+        if bookmark.deleted != deleted {
+            bookmark.record_edit("deleted")?;
+            bookmark.deleted = deleted;
+        }
+        Ok(bookmark.clone())
     }
 
     pub fn edit(&mut self, id: &str, edit: BookmarkEdit) -> Result<Bookmark> {

@@ -76,10 +76,10 @@ function SavePage() {
         setSaving(false);
       }
     }}>{saving ? "Saving…" : "Save bookmark"}</button>
-    <p role="status">{result && (result.created ? "Bookmark saved on this device." : "Already saved. Your original bookmark is kept.")}</p>
+    <p role="status">{result && (result.bookmark.deleted ? "In Trash. Open the bookmark to restore it explicitly." : result.created ? "Bookmark saved on this device." : "Already saved. Your original bookmark is kept.")}</p>
     {result && <article><strong>{result.bookmark.title}</strong><p className="url">{result.bookmark.url}</p></article>}
     <a href={browser.runtime.getURL(`/options.html${result ? `#bookmark-${result.bookmark.id}` : ""}`)} target="_blank" rel="noreferrer">
-      {result ? "View saved bookmark" : "Open my collection"}
+      {result?.bookmark.deleted ? "View bookmark in Trash" : result ? "View saved bookmark" : "Open my collection"}
     </a>
   </main>;
 }

@@ -1,4 +1,4 @@
-import { bookmarkWithDefaults, editBookmarkFields, createManualTag, editManualTag, normalizeBookmarkUrl, setManualTagAssignment,
+import { setBookmarkDeleted, bookmarkWithDefaults, editBookmarkFields, createManualTag, editManualTag, normalizeBookmarkUrl, setManualTagAssignment,
   type Bookmark, type BookmarkEdit, type CollectionSnapshot, type SaveResult, type Tag, type TagAssignment, type TagEdit } from "@tagmark/core";
 
 const database = new Promise<IDBDatabase>((resolve, reject) => {
@@ -159,5 +159,27 @@ export async function editBookmark(id: string, edit: BookmarkEdit): Promise<Book
     transaction.oncomplete = () => resolve(result);
     transaction.onabort = () => reject(failure ?? transaction.error ?? new Error("Bookmark could not be edited"));
     transaction.onerror = () => reject(transaction.error ?? new Error("Bookmark could not be edited"));
+  });
+}
+
+export async function changeBookmarkDeletion(id: string, deleted: boolean): Promise<void> {
+  const db = await database;
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction("bookmarks", "readwrite");
+    const bookmarks = transaction.objectStore("bookmarks");
+    const request = bookmarks.get(id);
+    let failure: unknown;
+    request.onsuccess = () => {
+      try {
+        if (!request.result) throw new Error("Bookmark not found");
+        bookmarks.put(setBookmarkDeleted(bookmarkWithDefaults(request.result as Bookmark), deleted));
+      } catch (error) {
+        failure = error;
+        transaction.abort();
+      }
+    };
+    transaction.oncomplete = () => resolve();
+    transaction.onabort = () => reject(failure ?? transaction.error ?? new Error("Bookmark could not be updated"));
+    transaction.onerror = () => reject(transaction.error ?? new Error("Bookmark could not be updated"));
   });
 }

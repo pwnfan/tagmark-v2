@@ -58,3 +58,14 @@ cargo run -- --collection collection.json tag-reject <bookmark-id> <tag-id>
 URL 身份的共同样例位于 `fixtures/url-identity.json`，Rust 与 TypeScript 均读取它。浏览器测试使用独立的临时配置目录和实际构建的插件，不使用个人 Chrome 数据。
 
 若 Windows 在默认浏览器缓存目录报 `side-by-side configuration` 错误，可将 `PLAYWRIGHT_BROWSERS_PATH` 指向本项目的 `.scratch/browsers`，重新执行浏览器安装及检查；后续运行保留同一环境变量。该配置只改变测试浏览器的缓存位置。
+
+`list` 只显示正常收藏，`list --trash` 只显示回收站。删除和恢复保留同一身份与内容；删除状态和人工版本保存在完整快照中，不自动清空。同址重新收藏仍返回回收站中的原条目，必须显式恢复。
+
+插件管理页提供 Saved bookmarks／Trash 两个视图和逐条恢复。Download local snapshot 下载完整私有快照，包含回收站；它不是公开导出。旧版未含删除字段的本地条目按正常收藏读取。
+
+
+```sh
+cargo run -- --collection collection.json delete <bookmark-id>
+cargo run -- --collection collection.json list --trash
+cargo run -- --collection collection.json restore <bookmark-id>
+```

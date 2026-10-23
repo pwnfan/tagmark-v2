@@ -18,6 +18,157 @@ fn run(collection: &Path, arguments: &[&str]) -> Value {
 }
 
 #[test]
+fn trash_retains_the_original_until_explicit_restore() {
+    let directory = tempfile::tempdir().unwrap();
+    let collection = directory.path().join("collection.json");
+    run(&collection, &["init"]);
+    let saved = run(
+        &collection,
+        &[
+            "save",
+            "https://example.com/keep",
+            "--title",
+            "Keep my title",
+        ],
+    );
+    let id = saved["bookmark"]["id"].as_str().unwrap();
+    run(
+        &collection,
+        &[
+            "edit",
+            id,
+            "--private-note",
+            "Private decision",
+            "--description",
+            "Retained description",
+            "--body-excerpt",
+            "Retained paragraph",
+            "--include-body",
+            "true",
+            "--skip-ai",
+            "true",
+        ],
+    );
+    let added = run(
+        &collection,
+        &["tag-create", "reading", "--definition", "Reading material"],
+    );
+    let rejected = run(
+        &collection,
+        &[
+            "tag-create",
+            "unrelated",
+            "--definition",
+            "Unrelated material",
+        ],
+    );
+    run(&collection, &["tag-add", id, added["id"].as_str().unwrap()]);
+    let original = run(
+        &collection,
+        &["tag-reject", id, rejected["id"].as_str().unwrap()],
+    );
+    let deleted = run(&collection, &["delete", id]);
+    assert_eq!(deleted["id"], original["id"]);
+    assert_eq!(deleted["title"], original["title"]);
+    assert_eq!(deleted["url"], original["url"]);
+    assert_eq!(deleted["deleted"], true);
+    assert_eq!(
+        deleted["fieldState"]["deleted"],
+        serde_json::json!({"source":"manual","version":1,"protected":true})
+    );
+    assert_eq!(run(&collection, &["list"]), serde_json::json!([]));
+    assert_eq!(
+        run(&collection, &["list", "--trash"]),
+        serde_json::json!([deleted])
+    );
+    let duplicate = run(
+        &collection,
+        &["save", "https://example.com/keep", "--title", "Replacement"],
+    );
+    assert_eq!(duplicate["created"], false);
+    assert_eq!(duplicate["bookmark"], deleted);
+    assert_eq!(run(&collection, &["delete", id]), deleted);
+    let mut expected_deleted = original.clone();
+    expected_deleted["deleted"] = true.into();
+    expected_deleted["fieldState"]["deleted"] =
+        serde_json::json!({"source":"manual","version":1,"protected":true});
+    assert_eq!(deleted, expected_deleted);
+    let edited_in_trash = run(
+        &collection,
+        &["edit", id, "--private-note", "Edited while in Trash"],
+    );
+    expected_deleted["privateNote"] = "Edited while in Trash".into();
+    expected_deleted["fieldState"]["privateNote"]["version"] = 2.into();
+    assert_eq!(edited_in_trash, expected_deleted);
+    assert_eq!(run(&collection, &["list"]), serde_json::json!([]));
+    let snapshot: Value = serde_json::from_slice(&std::fs::read(&collection).unwrap()).unwrap();
+    assert_eq!(snapshot["bookmarks"], serde_json::json!([edited_in_trash]));
+    assert_eq!(snapshot["tags"], run(&collection, &["tags"]));
+    let restored = run(&collection, &["restore", id]);
+    assert_eq!(restored["deleted"], false);
+    assert_eq!(restored["fieldState"]["deleted"]["version"], 2);
+    assert_eq!(restored["id"], original["id"]);
+    assert_eq!(restored["title"], original["title"]);
+    assert_eq!(restored["url"], original["url"]);
+    expected_deleted["deleted"] = false.into();
+    expected_deleted["fieldState"]["deleted"]["version"] = 2.into();
+    assert_eq!(restored, expected_deleted);
+    assert_eq!(run(&collection, &["list"]), serde_json::json!([restored]));
+    assert_eq!(
+        run(&collection, &["list", "--trash"]),
+        serde_json::json!([])
+    );
+    assert_eq!(run(&collection, &["restore", id]), restored);
+}
+
+#[test]
+fn legacy_bookmarks_default_to_active_and_invalid_deletion_versions_do_not_write() {
+    let directory = tempfile::tempdir().unwrap();
+    let collection = directory.path().join("collection.json");
+    let id = "2c60f487-b591-41ba-9821-18c61f38abf3";
+    let legacy = serde_json::json!({ "id": id, "url": "https://example.com/", "title": "Legacy" });
+    std::fs::write(
+        &collection,
+        serde_json::to_vec(&serde_json::json!({"schemaVersion":1,"bookmarks":[legacy]})).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(run(&collection, &["list"])[0]["deleted"], false);
+    assert_eq!(
+        run(&collection, &["delete", id])["fieldState"]["deleted"]["version"],
+        1
+    );
+
+    for state in [
+        serde_json::Value::Null,
+        serde_json::json!({"source":"manual","version":0,"protected":true}),
+        serde_json::json!({"source":"manual","version":1.5,"protected":true}),
+        serde_json::json!({"source":"manual","version":9_007_199_254_740_992_u64,"protected":true}),
+        serde_json::json!({"source":"manual","version":9_007_199_254_740_991_u64,"protected":true}),
+    ] {
+        let mut bookmark = legacy.clone();
+        bookmark["deleted"] = true.into();
+        if !state.is_null() {
+            bookmark["fieldState"] = serde_json::json!({"deleted":state});
+        }
+        let original =
+            serde_json::to_vec(&serde_json::json!({"schemaVersion":1,"bookmarks":[bookmark]}))
+                .unwrap();
+        std::fs::write(&collection, &original).unwrap();
+        let output = Command::new(env!("CARGO_BIN_EXE_tagmark"))
+            .arg("--collection")
+            .arg(&collection)
+            .args(["restore", id])
+            .output()
+            .unwrap();
+        assert!(
+            !output.status.success(),
+            "Unsafe deletion state was accepted: {state}"
+        );
+        assert_eq!(std::fs::read(&collection).unwrap(), original);
+    }
+}
+
+#[test]
 fn saved_bookmark_can_be_listed_after_the_process_restarts() {
     let directory = tempfile::tempdir().unwrap();
     let collection = directory.path().join("collection.json");

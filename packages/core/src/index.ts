@@ -2,6 +2,7 @@ export interface Bookmark {
   id: string;
   url: string;
   title: string;
+  deleted: boolean;
   tagAssignments: Record<string, TagAssignment>;
   privateNote: string;
   evidence: { description: string; bodyExcerpt: string };
@@ -21,10 +22,11 @@ export interface BookmarkEdit {
 
 // Additive defaults keep snapshots and device caches created by T01 readable.
 export function bookmarkWithDefaults(bookmark: Pick<Bookmark, "id" | "url" | "title"> & Partial<Bookmark>): Bookmark {
+  if (bookmark.deleted && !bookmark.fieldState?.deleted) throw new Error("Deleted bookmarks require a deletion version");
   for (const state of Object.values(bookmark.fieldState ?? {})) {
     if (!Number.isSafeInteger(state.version) || state.version < 1) throw new Error("Field versions must be positive JavaScript-safe integers");
   }
-  return { tagAssignments: {}, privateNote: "", evidence: { description: "", bodyExcerpt: "" }, ai: { includeBody: false, skip: false }, fieldState: {}, ...bookmark };
+  return { deleted: false, tagAssignments: {}, privateNote: "", evidence: { description: "", bodyExcerpt: "" }, ai: { includeBody: false, skip: false }, fieldState: {}, ...bookmark };
 }
 
 export function editBookmarkFields(bookmark: Bookmark, edit: BookmarkEdit): Bookmark {
@@ -142,4 +144,11 @@ export function normalizeBookmarkUrl(input: string): string {
   }
   if (url.username || url.password) throw new Error("URLs containing credentials cannot be saved");
   return url.href;
+}
+
+export function setBookmarkDeleted(original: Bookmark, deleted: boolean): Bookmark {
+  if (original.deleted === deleted) return original;
+  const version = nextManualVersion(original.fieldState.deleted?.version);
+  return { ...original, deleted, fieldState: { ...original.fieldState,
+    deleted: { source: "manual", version, protected: true } } };
 }

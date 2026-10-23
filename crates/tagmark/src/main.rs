@@ -23,8 +23,15 @@ enum Action {
         #[arg(long, default_value = "")]
         title: String,
     },
-    /// List the saved bookmarks as JSON.
-    List,
+    /// List active bookmarks, or only deleted bookmarks with --trash.
+    List {
+        #[arg(long)]
+        trash: bool,
+    },
+    /// Move a bookmark to Trash, keeping its identity and content.
+    Delete { id: String },
+    /// Explicitly restore a bookmark from Trash.
+    Restore { id: String },
     /// Create an English tag with its own definition and optional tagging rules.
     TagCreate {
         name: String,
@@ -122,7 +129,23 @@ fn execute(cli: Cli) -> Result<()> {
             }
             println!("{}", serde_json::to_string(&result)?);
         }
-        Action::List => println!("{}", serde_json::to_string(&collection.bookmarks)?),
+        Action::List { trash } => println!(
+            "{}",
+            serde_json::to_string(
+                &collection
+                    .bookmarks
+                    .iter()
+                    .filter(|bookmark| bookmark.deleted == trash)
+                    .collect::<Vec<_>>()
+            )?
+        ),
+        Action::Delete { ref id } | Action::Restore { ref id } => {
+            let deleted = matches!(cli.command, Action::Delete { .. });
+            let bookmark = collection.set_deleted(id, deleted)?;
+            write_collection(&cli.collection, &collection, false)?;
+            println!("{}", serde_json::to_string(&bookmark)?);
+        }
+
         Action::Tags => println!("{}", serde_json::to_string(&collection.tags)?),
         Action::TagAdd {
             bookmark_id,

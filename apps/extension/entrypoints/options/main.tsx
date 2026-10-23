@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { Bookmark, Tag } from "@tagmark/core";
-import { collectionSnapshot, listBookmarks, listTags, saveBookmark } from "../../lib/collection";
+import { changeBookmarkDeletion, collectionSnapshot, listBookmarks, listTags, saveBookmark } from "../../lib/collection";
 import { TagManager } from "./TagManager";
 import { BookmarkTags } from "./BookmarkTags";
 import { BookmarkEditor } from "../../lib/BookmarkEditor";
@@ -17,16 +17,29 @@ function Collection() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState("");
+  const [trash, setTrash] = useState(false);
   const [selected, setSelected] = useState(() => location.hash.startsWith("#bookmark-") ? location.hash.slice("#bookmark-".length) : "");
 
   useEffect(() => {
-    collectionSnapshot().then((snapshot) => { setBookmarks(snapshot.bookmarks); setTags(snapshot.tags); }).catch((error: unknown) => setError(String(error)))
-      .finally(() => setLoading(false));
+    const selectFromHash = () => setSelected(location.hash.startsWith("#bookmark-") ? location.hash.slice("#bookmark-".length) : "");
+    window.addEventListener("hashchange", selectFromHash);
+    return () => window.removeEventListener("hashchange", selectFromHash);
   }, []);
 
   useEffect(() => {
+    collectionSnapshot().then((snapshot) => {
+      setBookmarks(snapshot.bookmarks); setTags(snapshot.tags);
+      const bookmark = snapshot.bookmarks.find((bookmark) => bookmark.id === selected);
+      if (bookmark) setTrash(bookmark.deleted);
+    }).catch((error: unknown) => setError(String(error)))
+      .finally(() => setLoading(false));
+  }, [selected]);
+
+  useEffect(() => {
     if (selected) document.getElementById(`bookmark-${selected}`)?.focus();
-  }, [selected, bookmarks]);
+  }, [selected, bookmarks, trash]);
+
+  const visibleBookmarks = bookmarks.filter((bookmark) => bookmark.deleted === trash);
 
   return <main>
     <header><span className="brand">TagMark</span><span className="badge">Saved on this device</span></header>
@@ -41,7 +54,8 @@ function Collection() {
         const result = await saveBookmark(url, title);
         setBookmarks(await listBookmarks());
         setSelected(result.bookmark.id);
-        setStatus(result.created ? "Bookmark saved on this device." : "Already saved. Your original bookmark is kept.");
+        setTrash(result.bookmark.deleted);
+        setStatus(result.bookmark.deleted ? "In Trash. Restore this bookmark explicitly to return it to Saved bookmarks." : result.created ? "Bookmark saved on this device." : "Already saved. Your original bookmark is kept.");
       } catch (error) {
         setError(error instanceof Error ? error.message : "Bookmark could not be saved");
       } finally {
@@ -55,8 +69,12 @@ function Collection() {
     </form>
     {error && <p role="alert">{error}</p>}
     <p role="status">{status}</p>
-    <section aria-label="Saved bookmarks">
-      <div className="section-heading"><h2>Saved bookmarks · {bookmarks.length}</h2>
+    <nav aria-label="Collection views">
+      <button className="secondary" aria-pressed={!trash} onClick={() => setTrash(false)}>Saved bookmarks</button>
+      <button className="secondary" aria-pressed={trash} onClick={() => setTrash(true)}>Trash</button>
+    </nav>
+    <section aria-label={trash ? "Trash" : "Saved bookmarks"}>
+      <div className="section-heading"><h2>{trash ? "Trash" : "Saved bookmarks"} · {visibleBookmarks.length}</h2>
         <button className="secondary" disabled={loading} onClick={async () => {
           setError("");
           try {
@@ -72,10 +90,24 @@ function Collection() {
           }
         }}>Download local snapshot</button>
       </div>
-      {loading ? <p>Loading bookmarks…</p> : bookmarks.length === 0 ? <p className="empty">Your collection starts with one URL.</p> :
-        bookmarks.map((bookmark) => <article key={bookmark.id} id={`bookmark-${bookmark.id}`} tabIndex={-1}>
+      {trash && <p>Deleted bookmarks keep their content here until you restore them. Trash is never automatically emptied.</p>}
+      {loading ? <p>Loading bookmarks…</p> : visibleBookmarks.length === 0 ? <p className="empty">{trash ? "Trash is empty." : "Your collection starts with one URL."}</p> :
+        visibleBookmarks.map((bookmark) => <article key={bookmark.id} id={`bookmark-${bookmark.id}`} tabIndex={-1}>
           <a href={bookmark.url} target="_blank" rel="noreferrer">{bookmark.title}</a>
           <p className="url">{bookmark.url}</p>
+          <button className="secondary" disabled={saving} onClick={async () => {
+            setSaving(true);
+            setError("");
+            try {
+              await changeBookmarkDeletion(bookmark.id, !trash);
+              setBookmarks(await listBookmarks());
+              setStatus(trash ? "Bookmark restored to Saved bookmarks." : "Bookmark moved to Trash. Its content is kept.");
+            } catch (error) {
+              setError(error instanceof Error ? error.message : "Bookmark could not be updated");
+            } finally {
+              setSaving(false);
+            }
+          }}>{trash ? "Restore bookmark" : "Move to Trash"}</button>
           <BookmarkTags bookmark={bookmark} tags={tags} onChange={async () => setBookmarks(await listBookmarks())} onError={setError} onStatus={setStatus} />
           {editing === bookmark.id ? <BookmarkEditor bookmark={bookmark} onCancel={() => setEditing("")} onSaved={async () => {
             setBookmarks(await listBookmarks());

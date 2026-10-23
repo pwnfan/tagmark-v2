@@ -55,6 +55,99 @@ test("offline edits preserve identity, evidence choices and private notes across
   }
 });
 
+test("Trash keeps a bookmark through restart and duplicate save until explicit restore", async ({}, testInfo) => {
+  const profile = testInfo.outputPath("profile");
+  let collection = await openCollection(profile);
+  try {
+    let page = collection.page;
+    await page.getByLabel("URL", { exact: true }).fill("https://example.com/keep");
+    await page.getByLabel("Title", { exact: true }).fill("Keep my title");
+    await page.getByRole("button", { name: "Save bookmark", exact: true }).click();
+    await expect(page.locator("article:focus")).toBeVisible();
+    const originalId = await page.locator("article:focus").getAttribute("id");
+    await page.getByRole("button", { name: "Edit bookmark", exact: true }).click();
+    const editor = page.getByRole("form", { name: "Edit bookmark", exact: true });
+    await editor.getByLabel("Private note", { exact: true }).fill("Private decision");
+    await editor.getByLabel("Page description", { exact: true }).fill("Retained description");
+    await editor.getByLabel("Body excerpt", { exact: true }).fill("Retained paragraph");
+    await editor.getByLabel("Allow body excerpt for AI", { exact: true }).check();
+    await editor.getByLabel("Skip AI for this bookmark", { exact: true }).check();
+    await editor.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(editor).toHaveCount(0);
+    for (const [name, action] of [["reading", "Add tag"], ["unrelated", "Reject tag"]]) {
+      const create = page.getByRole("form", { name: "Create tag", exact: true });
+      await create.getByLabel("English canonical name", { exact: true }).fill(name!);
+      await create.getByLabel("Short English definition", { exact: true }).fill(`Definition for ${name}`);
+      await create.getByRole("button", { name: "Create tag", exact: true }).click();
+      await page.getByLabel("Choose tag", { exact: true }).selectOption({ label: name! });
+      await page.getByRole("button", { name: action!, exact: true }).click();
+      await expect(page.locator("article")).toContainText(`${name} — ${action === "Add tag" ? "added" : "rejected"} · protected`);
+    }
+    const [beforeDownload] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("button", { name: "Download local snapshot", exact: true }).click(),
+    ]);
+    const beforePath = testInfo.outputPath("before-trash.json");
+    await beforeDownload.saveAs(beforePath);
+    const before = JSON.parse(readFileSync(beforePath, "utf8"));
+    await page.getByRole("button", { name: "Move to Trash", exact: true }).click({ timeout: 5000 });
+    await expect(page.locator("article")).toHaveCount(0);
+    await page.getByRole("button", { name: "Trash", exact: true }).click();
+    await expect(page.getByRole("link", { name: "Keep my title", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Edit bookmark", exact: true }).click();
+    const trashEditor = page.getByRole("form", { name: "Edit bookmark", exact: true });
+    await trashEditor.getByLabel("Private note", { exact: true }).fill("Edited while in Trash");
+    await trashEditor.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(trashEditor).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Restore bookmark", exact: true })).toBeVisible();
+    await collection.context.close();
+    collection = await openCollection(profile);
+    page = collection.page;
+    await expect(page.locator("article")).toHaveCount(0);
+    await page.getByLabel("URL", { exact: true }).fill("https://example.com/keep");
+    await page.getByLabel("Title", { exact: true }).fill("Do not replace");
+    await page.getByRole("button", { name: "Save bookmark", exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("In Trash");
+    await expect(page.locator("article:focus")).toHaveAttribute("id", originalId!);
+    await expect(page.getByRole("link", { name: "Keep my title", exact: true })).toBeVisible();
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("button", { name: "Download local snapshot", exact: true }).click(),
+    ]);
+    const snapshotPath = testInfo.outputPath("trash.json");
+    await download.saveAs(snapshotPath);
+    const snapshot = JSON.parse(readFileSync(snapshotPath, "utf8"));
+    const trash = JSON.parse(execFileSync("cargo", ["run", "--quiet", "--", "--collection", snapshotPath, "list", "--trash"], { encoding: "utf8" }));
+    expect(trash).toEqual(snapshot.bookmarks);
+    expect(trash).toHaveLength(1);
+    expect(trash[0].deleted).toBe(true);
+    expect(trash[0].fieldState.deleted).toEqual({ source: "manual", version: 1, protected: true });
+    expect(snapshot.tags).toEqual(before.tags);
+    expect(trash[0]).toEqual({ ...before.bookmarks[0], deleted: true, privateNote: "Edited while in Trash",
+      fieldState: { ...before.bookmarks[0].fieldState,
+        privateNote: { source: "manual", version: 2, protected: true },
+        deleted: { source: "manual", version: 1, protected: true } } });
+    await page.screenshot({ path: testInfo.outputPath("trash.png"), fullPage: true });
+    await page.getByRole("button", { name: "Restore bookmark", exact: true }).click();
+    await expect(page.locator("article")).toHaveCount(0);
+    await page.getByRole("button", { name: "Saved bookmarks", exact: true }).click();
+    await expect(page.locator("article")).toHaveAttribute("id", originalId!);
+    await expect(page.getByRole("link", { name: "Keep my title", exact: true })).toBeVisible();
+    const [restoredDownload] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("button", { name: "Download local snapshot", exact: true }).click(),
+    ]);
+    const restoredPath = testInfo.outputPath("restored.json");
+    await restoredDownload.saveAs(restoredPath);
+    const restored = JSON.parse(readFileSync(restoredPath, "utf8"));
+    expect(restored.bookmarks).toEqual([{ ...trash[0], deleted: false,
+      fieldState: { ...trash[0].fieldState, deleted: { source: "manual", version: 2, protected: true } } }]);
+    expect(restored.tags).toEqual(before.tags);
+  } finally {
+    await collection.context.close();
+  }
+});
+
 async function openCollection(profile: string) {
   const context = await chromium.launchPersistentContext(profile, {
     channel: "chromium",
@@ -123,10 +216,33 @@ test("the extension action saves the current page with its title and full URL", 
     await collection.page.reload();
     await expect(collection.page.getByRole("link", { name: "A useful article", exact: true }))
       .toHaveAttribute("href", "https://example.test/read?b=2&a=1#intro");
+    await collection.page.getByRole("button", { name: "Move to Trash", exact: true }).click();
+    await expect(collection.page.locator("article")).toHaveCount(0);
+    await popup.getByRole("button", { name: "Save bookmark", exact: true }).click();
+    await expect(popup.getByRole("status")).toContainText("In Trash");
+    const trashLink = await popup.getByRole("link", { name: "View bookmark in Trash", exact: true }).getAttribute("href");
+    await collection.page.goto(trashLink!);
+    await expect(collection.page.getByRole("button", { name: "Trash", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(collection.page.locator("article:focus").getByRole("link", { name: "A useful article", exact: true })).toBeVisible();
+
     await collection.page.getByRole("button", { name: "Edit bookmark", exact: true }).click();
     await expect(collection.page.getByRole("textbox", { name: "Body excerpt", exact: true })).toHaveValue("");
     await expect(collection.page.getByRole("textbox", { name: "Page description", exact: true })).toHaveValue("A useful description");
     await expect(collection.page.getByLabel("Skip AI for this bookmark", { exact: true })).toBeChecked();
+    await popup.close();
+    await article.goto("https://example.test/active");
+    const { targetInfos: updatedTargets } = await collection.session.send("Target.getTargets", { filter: [{ type: "tab" }] });
+    const activeTarget = updatedTargets.find((target) => target.url === article.url());
+    const [activePopup] = await Promise.all([
+      collection.context.waitForEvent("page"),
+      collection.session.send("Extensions.triggerAction", { id: collection.id, targetId: activeTarget!.targetId }),
+    ]);
+    await activePopup.getByRole("button", { name: "Save bookmark", exact: true }).click();
+    await expect(activePopup.getByRole("status")).toContainText("saved");
+    const activeLink = await activePopup.getByRole("link", { name: "View saved bookmark", exact: true }).getAttribute("href");
+    await collection.page.goto(activeLink!);
+    await expect(collection.page.getByRole("button", { name: "Saved bookmarks", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(collection.page.locator("article:focus").getByRole("link", { name: "A useful article", exact: true })).toHaveAttribute("href", "https://example.test/active");
   } finally {
     await collection.context.close();
   }
