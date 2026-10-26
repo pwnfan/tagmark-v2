@@ -42,3 +42,10 @@ input[type="checkbox"] { display: inline-block; width: auto; margin: 0 8px 0 0; 
 .actions { display: flex; gap: 12px; margin-top: 20px; }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 article > button { margin-top: 14px; }
+.publication > fieldset { margin-top: 20px; padding: 20px; border: 1px solid #d8e2da; border-radius: 12px; background: white; }
+.publication-tags { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.publication-tags fieldset { border: 1px solid #d8e2da; border-radius: 6px; }
+.publication-notice { padding: 12px; background: #f1f5e8; border-left: 3px solid #82964b; }
+.publication-preview { margin-top: 20px; padding: 20px; background: #e7eee8; border-radius: 12px; }
+.publication-preview li { margin: 12px 0; overflow-wrap: anywhere; }
+@media (max-width: 520px) { .publication-tags { grid-template-columns: 1fr; } }

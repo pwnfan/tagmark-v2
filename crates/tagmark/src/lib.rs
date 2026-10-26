@@ -3,6 +3,8 @@ use std::collections::{BTreeMap, HashSet};
 use std::error::Error;
 use url::Url;
 use uuid::Uuid;
+pub mod publication;
+pub use publication::{PublicationChoice, PublicationMode, PublicationPolicy};
 
 pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
 const MAX_MANUAL_VERSION: u64 = 9_007_199_254_740_991;
@@ -82,6 +84,8 @@ pub struct Bookmark {
     pub title: String,
     #[serde(default)]
     pub deleted: bool,
+    #[serde(default)]
+    pub publication_choice: PublicationChoice,
     #[serde(default)]
     pub tag_assignments: BTreeMap<String, TagAssignment>,
     #[serde(default)]
@@ -176,6 +180,8 @@ pub struct Collection {
     pub bookmarks: Vec<Bookmark>,
     #[serde(default)]
     pub tags: Vec<Tag>,
+    #[serde(default)]
+    pub publication: PublicationPolicy,
 }
 
 #[derive(Debug, Serialize)]
@@ -190,6 +196,7 @@ impl Default for Collection {
             schema_version: 1,
             bookmarks: Vec::new(),
             tags: Vec::new(),
+            publication: PublicationPolicy::default(),
         }
     }
 }
@@ -264,6 +271,7 @@ impl Collection {
                 }
             }
         }
+        self.validate_publication()?;
         Ok(())
     }
 
@@ -394,6 +402,7 @@ impl Collection {
         }
         let bookmark = Bookmark {
             deleted: false,
+            publication_choice: PublicationChoice::default(),
             tag_assignments: BTreeMap::new(),
             id: Uuid::new_v4().to_string(),
             title: if title.trim().is_empty() {

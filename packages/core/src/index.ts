@@ -1,8 +1,12 @@
+import type { PublicationChoice, PublicationPolicy } from "./publication.ts";
+export * from "./publication.ts";
+
 export interface Bookmark {
   id: string;
   url: string;
   title: string;
   deleted: boolean;
+  publicationChoice: PublicationChoice;
   tagAssignments: Record<string, TagAssignment>;
   privateNote: string;
   evidence: { description: string; bodyExcerpt: string };
@@ -23,10 +27,12 @@ export interface BookmarkEdit {
 // Additive defaults keep snapshots and device caches created by T01 readable.
 export function bookmarkWithDefaults(bookmark: Pick<Bookmark, "id" | "url" | "title"> & Partial<Bookmark>): Bookmark {
   if (bookmark.deleted && !bookmark.fieldState?.deleted) throw new Error("Deleted bookmarks require a deletion version");
+  if (bookmark.publicationChoice !== undefined && !["followRules", "manualPublic", "manualPrivate"].includes(bookmark.publicationChoice)) throw new Error("Invalid publication choice");
+  if (bookmark.publicationChoice && bookmark.publicationChoice !== "followRules" && !bookmark.fieldState?.publicationChoice) throw new Error("Publication choices require a version");
   for (const state of Object.values(bookmark.fieldState ?? {})) {
     if (!Number.isSafeInteger(state.version) || state.version < 1) throw new Error("Field versions must be positive JavaScript-safe integers");
   }
-  return { deleted: false, tagAssignments: {}, privateNote: "", evidence: { description: "", bodyExcerpt: "" }, ai: { includeBody: false, skip: false }, fieldState: {}, ...bookmark };
+  return { deleted: false, publicationChoice: "followRules", tagAssignments: {}, privateNote: "", evidence: { description: "", bodyExcerpt: "" }, ai: { includeBody: false, skip: false }, fieldState: {}, ...bookmark };
 }
 
 export function editBookmarkFields(bookmark: Bookmark, edit: BookmarkEdit): Bookmark {
@@ -57,6 +63,7 @@ export interface CollectionSnapshot {
   schemaVersion: 1;
   bookmarks: Bookmark[];
   tags: Tag[];
+  publication?: PublicationPolicy;
 }
 
 export interface ManualFieldState {
@@ -81,7 +88,7 @@ export interface Tag {
 
 export interface TagEdit { definition?: string; inclusion?: string; exclusion?: string; examples?: string }
 
-function nextManualVersion(current?: number): number {
+export function nextManualVersion(current?: number): number {
   if (current !== undefined && (!Number.isSafeInteger(current) || current <= 0 || current >= Number.MAX_SAFE_INTEGER)) {
     throw new Error("Manual version cannot be advanced safely");
   }

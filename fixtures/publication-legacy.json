@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "bookmarks": [
+    { "id": "10000000-0000-4000-8000-000000000002", "url": "https://example.com/second", "title": "Second resource" },
+    { "id": "10000000-0000-4000-8000-000000000001", "url": "https://example.com/first", "title": "First resource" }
+  ],
+  "tags": [],
+  "publication": {
+    "mode": "allMinusExcluded",
+    "includedTagIds": [],
+    "excludedTagIds": [],
+    "fieldState": { "mode": { "source": "manual", "version": 1, "protected": true } }
+  }
+}

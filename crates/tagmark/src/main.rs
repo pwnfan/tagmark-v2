@@ -82,6 +82,10 @@ enum Action {
     },
     /// Preview allowed AI input without sending it to a model (null when skipped).
     AiEvidence { id: String },
+    /// Explain the current desired public selection (does not deploy).
+    PublicationPreview,
+    /// Export only admitted bookmarks and the display fields of their used tags.
+    PublicExport,
 }
 
 fn write_collection(path: &Path, collection: &Collection, create: bool) -> Result<()> {
@@ -147,6 +151,13 @@ fn execute(cli: Cli) -> Result<()> {
         }
 
         Action::Tags => println!("{}", serde_json::to_string(&collection.tags)?),
+        Action::PublicationPreview => println!(
+            "{}",
+            serde_json::to_string(&collection.publication_preview())?
+        ),
+        Action::PublicExport => {
+            println!("{}", serde_json::to_string(&collection.public_export()?)?)
+        }
         Action::TagAdd {
             bookmark_id,
             tag_id,

@@ -4,6 +4,7 @@ import type { Bookmark, Tag } from "@tagmark/core";
 import { changeBookmarkDeletion, collectionSnapshot, listBookmarks, listTags, saveBookmark } from "../../lib/collection";
 import { TagManager } from "./TagManager";
 import { BookmarkTags } from "./BookmarkTags";
+import { PublicationManager } from "./PublicationManager";
 import { BookmarkEditor } from "../../lib/BookmarkEditor";
 import "../../style.css";
 
@@ -117,6 +118,9 @@ function Collection() {
           }} /> : <button className="secondary" onClick={() => setEditing(bookmark.id)}>Edit bookmark</button>}
         </article>)}
     </section>
+    <PublicationManager bookmarks={bookmarks} tags={tags} onSaved={async () => {
+      const snapshot = await collectionSnapshot(); setBookmarks(snapshot.bookmarks); setTags(snapshot.tags);
+    }} onError={setError} onStatus={setStatus} />
     <TagManager tags={tags} onChange={async () => setTags(await listTags())} onError={setError} onStatus={setStatus} />
   </main>;
 }

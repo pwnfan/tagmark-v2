@@ -1,0 +1,15 @@
+[
+  {"name":"default stays private","added":[],"published":false,"reason":"manualOnly"},
+  {"name":"empty includes select none","mode":"includeAny","added":["rust"],"published":false,"reason":"noIncludedTag"},
+  {"name":"neutral tag does not veto","mode":"includeAny","included":["rust"],"added":["rust","tool"],"published":true,"reason":"includedTag","matched":["rust"]},
+  {"name":"excluded tag vetoes manual public","mode":"includeAny","included":["rust"],"excluded":["private"],"added":["rust","private"],"choice":"manualPublic","published":false,"reason":"excludedTag","matched":["private"]},
+  {"name":"same tag on both lists is excluded","mode":"includeAny","included":["rust"],"excluded":["rust"],"added":["rust"],"published":false,"reason":"excludedTag","matched":["rust"]},
+  {"name":"manual private precedes base rule","mode":"allMinusExcluded","added":[],"choice":"manualPrivate","published":false,"reason":"manualPrivate"},
+  {"name":"manual public works with neutral tag","added":["tool"],"choice":"manualPublic","published":true,"reason":"manualPublic"},
+  {"name":"trash precedes exclusion and manual public","mode":"allMinusExcluded","excluded":["private"],"added":["private"],"choice":"manualPublic","deleted":true,"published":false,"reason":"trash"},
+  {"name":"explicit inverse includes untagged","mode":"allMinusExcluded","added":[],"published":true,"reason":"allMinusExcluded"},
+  {"name":"rejected excluded association is inactive","mode":"allMinusExcluded","excluded":["private"],"added":["tool"],"rejected":["private"],"published":true,"reason":"allMinusExcluded"},
+  {"name":"rejected inclusion is inactive","mode":"includeAny","included":["rust"],"added":[],"rejected":["rust"],"published":false,"reason":"noIncludedTag"},
+  {"name":"any include matches","mode":"includeAny","included":["rust","tool"],"added":["tool"],"published":true,"reason":"includedTag","matched":["tool"]},
+  {"name":"any exclusion vetoes","mode":"allMinusExcluded","excluded":["private","tool"],"added":["tool"],"published":false,"reason":"excludedTag","matched":["tool"]}
+]

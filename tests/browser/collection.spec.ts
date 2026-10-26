@@ -2,8 +2,188 @@ import { chromium, expect, test } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { exportPublicCollection, previewPublication, type CollectionSnapshot } from "../../packages/core/src/index.ts";
 
 const extensionPath = resolve("apps/extension/.output/chrome-mv3");
+
+test("publication previews rules and manual choices before saving and matches the CLI public whitelist", async ({}, testInfo) => {
+  const profile = testInfo.outputPath("profile");
+  let collection = await openCollection(profile);
+  try {
+    let page = collection.page;
+    await page.getByLabel("URL", { exact: true }).fill("https://example.com/publication");
+    await page.getByLabel("Title", { exact: true }).fill("Public resource");
+    await page.getByRole("button", { name: "Save bookmark", exact: true }).click();
+    await page.getByRole("button", { name: "Edit bookmark", exact: true }).click();
+    const editor = page.getByRole("form", { name: "Edit bookmark", exact: true });
+    await editor.getByLabel("Private note", { exact: true }).fill("PRIVATE_NOTE_SENTINEL");
+    await editor.getByLabel("Body excerpt", { exact: true }).fill("PRIVATE_BODY_SENTINEL");
+    await editor.getByRole("button", { name: "Save changes", exact: true }).click();
+    for (const name of ["rust", "private", "unused"]) {
+      const create = page.getByRole("form", { name: "Create tag", exact: true });
+      await create.getByLabel("English canonical name", { exact: true }).fill(name);
+      await create.getByLabel("Short English definition", { exact: true }).fill(name === "unused" ? "PRIVATE_UNUSED_SENTINEL" : `${name} resources.`);
+      await create.getByLabel("Inclusion", { exact: true }).fill("PRIVATE_RULE_SENTINEL");
+      await create.getByRole("button", { name: "Create tag", exact: true }).click();
+      await expect(page.getByRole("form", { name: `Edit tag ${name}`, exact: true })).toBeVisible();
+    }
+    const bookmark = page.locator("article");
+    await bookmark.getByLabel("Choose tag", { exact: true }).selectOption({ label: "rust" });
+    await bookmark.getByRole("button", { name: "Add tag", exact: true }).click();
+    await expect(bookmark).toContainText("rust — added");
+    const manager = page.getByRole("region", { name: "Publication selection", exact: true });
+    await expect(manager.getByLabel("Base mode", { exact: true })).toHaveValue("manualOnly");
+    await manager.getByRole("button", { name: "Preview changes", exact: true }).click();
+    await expect(manager).toContainText("Selected: 0 · Added: 0 · Removed: 0");
+    await manager.getByLabel("Base mode", { exact: true }).selectOption("includeAny");
+    await manager.getByLabel("Include rust", { exact: true }).check();
+    await manager.getByLabel("Exclude private", { exact: true }).check();
+    await manager.getByRole("button", { name: "Preview changes", exact: true }).click();
+    await expect(manager).toContainText("Selected: 1 · Added: 1 · Removed: 0");
+    await expect(manager).toContainText("Included tag: rust");
+    await expect(manager).toContainText("AI");
+    const readSnapshot = async (name: string): Promise<CollectionSnapshot> => {
+      const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Download local snapshot", exact: true }).click()]);
+      const path = testInfo.outputPath(name); await download.saveAs(path);
+      return JSON.parse(readFileSync(path, "utf8"));
+    };
+    expect((await readSnapshot("before-save.json")).publication?.mode).toBe("manualOnly");
+    await page.screenshot({ path: testInfo.outputPath("publication-preview.png"), fullPage: true });
+    await manager.screenshot({ path: testInfo.outputPath("publication-manager.png") });
+    await manager.getByRole("button", { name: "Save publication choices", exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("Publication choices saved");
+    let snapshot = await readSnapshot("saved.json");
+    const cli = (file: string, command: string) => JSON.parse(execFileSync("cargo", ["run", "--quiet", "--", "--collection", testInfo.outputPath(file), command], { encoding: "utf8" }));
+    expect(cli("saved.json", "publication-preview")).toEqual(previewPublication(snapshot));
+    expect(cli("saved.json", "public-export")).toEqual(exportPublicCollection(snapshot));
+    expect(JSON.stringify(cli("saved.json", "public-export"))).not.toMatch(/PRIVATE_|"(?:fieldState|rules|publication|tagAssignments)":/);
+    await bookmark.getByLabel("Choose tag", { exact: true }).selectOption({ label: "private" });
+    await bookmark.getByRole("button", { name: "Add tag", exact: true }).click();
+    await expect(bookmark).toContainText("private — added");
+    await manager.getByLabel("Publication choice for Public resource", { exact: true }).selectOption("manualPublic");
+    await manager.getByRole("button", { name: "Preview changes", exact: true }).click();
+    await expect(manager).toContainText("Blocked by excluded tag: private");
+    await expect(manager).toContainText("Selected: 0");
+    await manager.getByRole("button", { name: "Save publication choices", exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("Publication choices saved");
+    snapshot = await readSnapshot("veto.json");
+    expect(snapshot.bookmarks[0]?.fieldState.publicationChoice?.version).toBe(1);
+    expect(cli("veto.json", "public-export")).toEqual({ schemaVersion: 1, bookmarks: [], tags: [] });
+    await bookmark.getByRole("button", { name: "Reject tag", exact: true }).click();
+    await expect(bookmark).toContainText("private — rejected");
+    snapshot = await readSnapshot("rejected.json");
+    expect(exportPublicCollection(snapshot).bookmarks).toHaveLength(1);
+    await collection.context.close();
+    collection = await openCollection(profile); page = collection.page;
+    await expect(page.getByLabel("Publication choice for Public resource", { exact: true })).toHaveValue("manualPublic");
+    await expect(page.getByLabel("Base mode", { exact: true })).toHaveValue("includeAny");
+  } finally { await collection.context.close(); }
+});
+
+test("publication retains dirty drafts across managers and rejects saving a stale preview", async ({}, testInfo) => {
+  const { context, page } = await openCollection(testInfo.outputPath("profile"));
+  try {
+    await page.getByLabel("URL", { exact: true }).fill("https://example.com/first");
+    await page.getByLabel("Title", { exact: true }).fill("First resource");
+    await page.getByRole("button", { name: "Save bookmark", exact: true }).click();
+    const create = page.getByRole("form", { name: "Create tag", exact: true });
+    await create.getByLabel("English canonical name", { exact: true }).fill("private");
+    await create.getByLabel("Short English definition", { exact: true }).fill("Private resources.");
+    await create.getByRole("button", { name: "Create tag", exact: true }).click();
+    const manager = page.getByRole("region", { name: "Publication selection", exact: true });
+    await manager.getByLabel("Base mode", { exact: true }).selectOption("allMinusExcluded");
+    await manager.getByRole("button", { name: "Preview changes", exact: true }).click();
+    await expect(manager).toContainText("Selected: 1 · Added: 1 · Removed: 0");
+    await manager.getByRole("button", { name: "Save publication choices", exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("Publication choices saved");
+    await expect(manager).toContainText("Saved desired selection: 1");
+    await manager.getByLabel("Exclude private", { exact: true }).check();
+    await manager.getByLabel("Publication choice for First resource", { exact: true }).selectOption("manualPrivate");
+    const other = await context.newPage(); await other.goto(page.url());
+    const second = other.getByRole("region", { name: "Publication selection", exact: true });
+    await second.getByLabel("Base mode", { exact: true }).selectOption("includeAny");
+    await second.getByRole("button", { name: "Preview changes", exact: true }).click();
+    await expect(second).toContainText("Selected: 0 · Added: 0 · Removed: 1");
+    await second.getByRole("button", { name: "Save publication choices", exact: true }).click();
+    await expect(other.getByRole("status")).toContainText("Publication choices saved");
+    // A local refresh must update untouched fields while retaining the first manager's edits.
+    await page.getByLabel("URL", { exact: true }).fill("https://example.com/second");
+    await page.getByLabel("Title", { exact: true }).fill("Second resource");
+    await page.getByRole("button", { name: "Save bookmark", exact: true }).click();
+    await expect(manager.getByLabel("Base mode", { exact: true })).toHaveValue("includeAny");
+    await expect(manager.getByLabel("Exclude private", { exact: true })).toBeChecked();
+    await expect(manager.getByLabel("Publication choice for First resource", { exact: true })).toHaveValue("manualPrivate");
+    await manager.getByRole("button", { name: "Preview changes", exact: true }).click();
+    await expect(manager).toContainText("Manually private");
+    await other.getByRole("button", { name: "Edit bookmark", exact: true }).click();
+    const editor = other.getByRole("form", { name: "Edit bookmark", exact: true });
+    await editor.getByLabel("Private note", { exact: true }).fill("Other manager note");
+    await editor.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(editor).toHaveCount(0);
+    await manager.getByRole("button", { name: "Save publication choices", exact: true }).click();
+    await expect(page.getByRole("alert")).toContainText("Collection changed since the preview");
+    await expect(manager.getByLabel("Exclude private", { exact: true })).toBeChecked();
+    await manager.getByRole("button", { name: "Preview changes", exact: true }).click();
+    await manager.getByRole("button", { name: "Save publication choices", exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("Publication choices saved");
+    const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Download local snapshot", exact: true }).click()]);
+    const path = testInfo.outputPath("concurrent-publication.json"); await download.saveAs(path);
+    const saved: CollectionSnapshot = JSON.parse(readFileSync(path, "utf8"));
+    expect(saved.publication?.fieldState.mode?.version).toBe(2);
+    expect(saved.publication?.fieldState.excludedTagIds?.version).toBe(1);
+    const first = saved.bookmarks.find((bookmark) => bookmark.title === "First resource");
+    expect(first?.publicationChoice).toBe("manualPrivate");
+    expect(first?.privateNote).toBe("Other manager note");
+    expect(first?.fieldState.publicationChoice?.version).toBe(1);
+  } finally { await context.close(); }
+});
+
+test("publication upgrade preserves a v2 device cache including Trash, evidence and protected rejections", async ({}, testInfo) => {
+  const { context, page } = await openCollection(testInfo.outputPath("profile"));
+  try {
+    const manual = { source: "manual", version: 2, protected: true };
+    const tagId = "20000000-0000-4000-8000-000000000001";
+    const legacy = {
+      bookmarks: [{ id: "10000000-0000-4000-8000-000000000001", url: "https://example.com/legacy", title: "Legacy resource", deleted: true,
+        privateNote: "Legacy private note", evidence: { description: "Legacy description", bodyExcerpt: "Legacy paragraph" }, ai: { includeBody: true, skip: true },
+        fieldState: { deleted: manual, title: manual }, tagAssignments: { [tagId]: { ...manual, state: "rejected" } } }],
+      tags: [{ id: tagId, canonicalName: "legacy", definition: "Legacy resources.", rules: { inclusion: "Private rule", exclusion: "", examples: "" }, fieldState: { definition: manual } }],
+    };
+    // Seed the previous released cache format through the real browser database boundary.
+    await page.evaluate(async (seed) => {
+      await new Promise<void>((resolve, reject) => {
+        const remove = indexedDB.deleteDatabase("tagmark"); remove.onsuccess = () => resolve(); remove.onerror = () => reject(remove.error);
+      });
+      await new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open("tagmark", 2);
+        request.onupgradeneeded = () => {
+          const bookmarks = request.result.createObjectStore("bookmarks", { keyPath: "id" }); bookmarks.createIndex("url", "url", { unique: true });
+          const tags = request.result.createObjectStore("tags", { keyPath: "id" }); tags.createIndex("canonicalName", "canonicalName", { unique: true });
+        };
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const transaction = request.result.transaction(["bookmarks", "tags"], "readwrite");
+          seed.bookmarks.forEach((bookmark) => transaction.objectStore("bookmarks").add(bookmark));
+          seed.tags.forEach((tag) => transaction.objectStore("tags").add(tag));
+          transaction.oncomplete = () => { request.result.close(); resolve(); };
+          transaction.onabort = () => { request.result.close(); reject(transaction.error); };
+        };
+      });
+    }, legacy);
+    await page.reload();
+    await expect(page.getByLabel("Base mode", { exact: true })).toHaveValue("manualOnly");
+    await page.getByRole("button", { name: "Trash", exact: true }).click();
+    await expect(page.getByRole("link", { name: "Legacy resource", exact: true })).toBeVisible();
+    await expect(page.locator("article")).toContainText("legacy — rejected · protected");
+    const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Download local snapshot", exact: true }).click()]);
+    const path = testInfo.outputPath("upgraded-v2.json"); await download.saveAs(path);
+    const snapshot: CollectionSnapshot = JSON.parse(readFileSync(path, "utf8"));
+    expect(snapshot.bookmarks).toEqual(legacy.bookmarks.map((bookmark) => ({ ...bookmark, publicationChoice: "followRules" })));
+    expect(snapshot.tags).toEqual(legacy.tags);
+    expect(snapshot.publication).toEqual({ mode: "manualOnly", includedTagIds: [], excludedTagIds: [], fieldState: {} });
+    expect(JSON.parse(execFileSync("cargo", ["run", "--quiet", "--", "--collection", path, "list", "--trash"], { encoding: "utf8" }))).toEqual(snapshot.bookmarks);
+  } finally { await context.close(); }
+});
 
 test("offline edits preserve identity, evidence choices and private notes across restart and snapshot export", async ({}, testInfo) => {
   const profile = testInfo.outputPath("profile");

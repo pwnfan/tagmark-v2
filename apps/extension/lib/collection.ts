@@ -1,15 +1,20 @@
 import { setBookmarkDeleted, bookmarkWithDefaults, editBookmarkFields, createManualTag, editManualTag, normalizeBookmarkUrl, setManualTagAssignment,
+  defaultPublicationPolicy, editPublicationPolicy, setPublicationChoice, validatePublicationPolicy,
+  type PublicationChoice, type PublicationEdit, type PublicationPolicy,
   type Bookmark, type BookmarkEdit, type CollectionSnapshot, type SaveResult, type Tag, type TagAssignment, type TagEdit } from "@tagmark/core";
 
 const database = new Promise<IDBDatabase>((resolve, reject) => {
-  const request = indexedDB.open("tagmark", 2);
+  const request = indexedDB.open("tagmark", 3);
   request.onupgradeneeded = () => {
     if (!request.result.objectStoreNames.contains("bookmarks")) {
       const bookmarks = request.result.createObjectStore("bookmarks", { keyPath: "id" });
       bookmarks.createIndex("url", "url", { unique: true });
     }
-    const tags = request.result.createObjectStore("tags", { keyPath: "id" });
-    tags.createIndex("canonicalName", "canonicalName", { unique: true });
+    if (!request.result.objectStoreNames.contains("tags")) {
+      const tags = request.result.createObjectStore("tags", { keyPath: "id" });
+      tags.createIndex("canonicalName", "canonicalName", { unique: true });
+    }
+    if (!request.result.objectStoreNames.contains("settings")) request.result.createObjectStore("settings");
   };
   request.onsuccess = () => {
     request.result.onversionchange = () => request.result.close();
@@ -120,15 +125,46 @@ export async function assignTag(bookmarkId: string, tagId: string, state: TagAss
 export async function collectionSnapshot(): Promise<CollectionSnapshot> {
   const db = await database;
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction(["bookmarks", "tags"]);
-    const bookmarks = transaction.objectStore("bookmarks").getAll();
-    const tags = transaction.objectStore("tags").getAll();
-    transaction.oncomplete = () => {
-      try {
-        resolve({ schemaVersion: 1, bookmarks: (bookmarks.result as Bookmark[]).map(bookmarkWithDefaults), tags: tags.result as Tag[] });
-      } catch (error) { reject(error); }
-    };
-    transaction.onabort = () => reject(transaction.error ?? new Error("Snapshot could not be read"));
+    const transaction = db.transaction(["bookmarks", "tags", "settings"]);
+    let snapshot: CollectionSnapshot;
+    let failure: unknown;
+    readSnapshot(transaction, (result) => { snapshot = result; }, (error) => { failure = error; transaction.abort(); });
+    transaction.oncomplete = () => resolve(snapshot);
+    transaction.onabort = () => reject(failure ?? transaction.error ?? new Error("Snapshot could not be read"));
+  });
+}
+
+// All reads share one transaction, including when a preview is checked before saving.
+function readSnapshot(transaction: IDBTransaction, onRead: (snapshot: CollectionSnapshot) => void, onError: (error: unknown) => void) {
+  const bookmarks = transaction.objectStore("bookmarks").getAll();
+  const tags = transaction.objectStore("tags").getAll();
+  const publication = transaction.objectStore("settings").get("publication");
+  publication.onsuccess = () => {
+    try {
+      const policy = (publication.result as PublicationPolicy | undefined) ?? defaultPublicationPolicy();
+      validatePublicationPolicy(policy, tags.result as Tag[]);
+      onRead({ schemaVersion: 1, bookmarks: (bookmarks.result as Bookmark[]).map(bookmarkWithDefaults), tags: tags.result as Tag[], publication: policy });
+    } catch (error) { onError(error); }
+  };
+}
+
+export async function savePublication(edit: PublicationEdit, choices: Record<string, PublicationChoice>, expected: CollectionSnapshot): Promise<void> {
+  const db = await database;
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(["bookmarks", "tags", "settings"], "readwrite");
+    let failure: unknown;
+    readSnapshot(transaction, (snapshot) => {
+      if (JSON.stringify(snapshot) !== JSON.stringify(expected)) throw new Error("Collection changed since the preview. Preview changes again before saving.");
+      const policy = editPublicationPolicy(snapshot.publication ?? defaultPublicationPolicy(), edit, snapshot.tags);
+      transaction.objectStore("settings").put(policy, "publication");
+      for (const [id, choice] of Object.entries(choices)) {
+        const bookmark = snapshot.bookmarks.find((entry) => entry.id === id);
+        if (!bookmark) throw new Error("Bookmark not found");
+        transaction.objectStore("bookmarks").put(setPublicationChoice(bookmark, choice));
+      }
+    }, (error) => { failure = error; transaction.abort(); });
+    transaction.oncomplete = () => resolve();
+    transaction.onabort = () => reject(failure ?? transaction.error ?? new Error("Publication choices were not saved"));
   });
 }
 

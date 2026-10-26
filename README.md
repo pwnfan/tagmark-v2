@@ -47,7 +47,7 @@ cargo run -- --collection collection.json tag-reject <bookmark-id> <tag-id>
 
 短定义与各项规则分别记录人工来源、版本和保护；添加或拒绝按每个标签关联单独记录。未填写的规则保持未保护，保存未改变的字段不会增加版本。管理表单只提交用户实际编辑过的字段，刷新其他标签不会覆盖未保存的输入或把旧字段写回。重复收藏保留这些人工决定。标签改名／合并、解除保护和 AI 执行属于后续任务。
 
-快照的 `tags` 和收藏的 `tagAssignments` 为版本 1 的新增字段；旧快照缺失时按空集合读取。人工版本号范围为 1 至 9,007,199,254,740,991，达到上限时拒绝修改，避免两端数字精度不一致。管理页下载的快照包含标签、规则及人工保护，CLI `tags`／`list` 可读取核对。导出仍是完整私有状态。
+快照的 `tags` 和收藏的 `tagAssignments` 为版本 1 的新增字段；旧快照缺失时按空集合读取。人工版本号范围为 1 至 9,007,199,254,740,991，达到上限时拒绝修改，避免两端数字精度不一致。管理页下载的快照包含标签、规则及人工保护，CLI `tags`／`list` 可读取核对。这份本地快照是完整私有状态。
 
 在 Chrome 的扩展程序页面开启开发者模式，加载 `apps/extension/.output/chrome-mv3` 目录。收藏缓存保存在插件自己的 IndexedDB 中；当前开发阶段尚未接通 GitHub 同步。
 
@@ -69,3 +69,20 @@ cargo run -- --collection collection.json delete <bookmark-id>
 cargo run -- --collection collection.json list --trash
 cargo run -- --collection collection.json restore <bookmark-id>
 ```
+
+## 公开清单与字段白名单
+
+管理页的 Publication selection 默认选择仅手动公开。可主动切换为任意包含标签后排除，或全部减排除；空包含列表不会选中条目。逐条选择支持跟随规则、手动公开和手动私有。优先级为回收站 → 任意不公开标签否决 → 手动私有 → 手动公开 → 基础规则；明确拒绝的标签关联不参与计算，其余未设置标签保持中立。
+
+修改后先点击 Preview changes，检查最终清单、数量、增删及每项原因，再保存。增删对比当前保存的期望清单；预览后如其他页面修改了收藏，保存将拒绝过时预览，保留草稿供重新检查。启用标签规则后，新收藏与人工／AI 标签变化会自动改变期望清单。当前只计算允许公开的范围，不表示网站已部署或撤回；部署与公开网站属于后续任务。
+
+从管理页下载本地快照后，CLI 可解释同一清单或生成紧凑的公开 JSON：
+
+```sh
+cargo run -- --collection collection.json publication-preview
+cargo run -- --collection collection.json public-export
+```
+
+`public-export` 仅输出入选收藏的 URL、标题、有效标签 ID，以及这些标签的当前英文显示名和短定义。尚未实现的 GitHub 元信息、链接检查与译文不会伪造为默认数据。备注、正文、打标规则、AI 偏好、人工保护、拒绝关联、回收站和未使用标签都不进入公开 JSON；压缩和网站部署在后续任务实现。
+
+私有快照中的 `publication` 保存 `mode`、`includedTagIds`、`excludedTagIds` 和逐字段 `fieldState`；收藏中的 `publicationChoice` 使用原有字段版本机制。旧快照缺失时分别使用仅手动、空列表和跟随规则，插件的 v2 IndexedDB 自动升级并保留原数据。规则引用稳定标签 ID，改显示名不改变范围；未知标签引用、无效枚举或缺失必要版本会报错，不会默默扩大公开范围。共同优先级样例见 `fixtures/publication.json`；真实 Chrome 测试会下载快照并核对 Rust CLI 与 TypeScript 的公开输出。
