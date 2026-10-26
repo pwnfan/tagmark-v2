@@ -159,3 +159,5 @@ export function setBookmarkDeleted(original: Bookmark, deleted: boolean): Bookma
   return { ...original, deleted, fieldState: { ...original.fieldState,
     deleted: { source: "manual", version, protected: true } } };
 }
+export { parseSnapshot, snapshotText } from "./snapshot.ts";
+export { GitHubRepository, validateRepository, type RemoteSnapshot } from "./sync.ts";

@@ -1,0 +1,471 @@
+{
+  "valid": [
+    {
+      "name": "empty legacy snapshot",
+      "snapshot": {
+        "schemaVersion": 1,
+        "bookmarks": []
+      }
+    },
+    {
+      "name": "private manual state and Trash",
+      "snapshot": {
+        "schemaVersion": 1,
+        "bookmarks": [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "url": "https://example.com/kept",
+            "title": "Kept title",
+            "deleted": true,
+            "privateNote": "Private note",
+            "evidence": {
+              "description": "Captured description",
+              "bodyExcerpt": "Captured body"
+            },
+            "ai": {
+              "includeBody": false,
+              "skip": true
+            },
+            "fieldState": {
+              "deleted": {
+                "source": "manual",
+                "version": 2,
+                "protected": true
+              },
+              "privateNote": {
+                "source": "manual",
+                "version": 3,
+                "protected": true
+              }
+            },
+            "tagAssignments": {
+              "00000000-0000-4000-8000-000000000002": {
+                "state": "rejected",
+                "source": "manual",
+                "version": 4,
+                "protected": true
+              }
+            }
+          }
+        ],
+        "tags": [
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "canonicalName": "reading",
+            "definition": "Reading material",
+            "rules": {
+              "inclusion": "Read later",
+              "exclusion": "Not relevant",
+              "examples": "Articles"
+            },
+            "fieldState": {
+              "definition": {
+                "source": "manual",
+                "version": 2,
+                "protected": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "versioned publication policy",
+      "snapshot": {
+        "schemaVersion": 1,
+        "bookmarks": [],
+        "tags": [],
+        "publication": {
+          "mode": "allMinusExcluded",
+          "includedTagIds": [],
+          "excludedTagIds": [],
+          "fieldState": {
+            "mode": {
+              "source": "manual",
+              "version": 2,
+              "protected": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "legacy bookmark with absent additive fields",
+      "snapshot": {
+        "schemaVersion": 1,
+        "bookmarks": [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "url": "https://example.com/legacy-absence",
+            "title": "Legacy absence"
+          }
+        ]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "unknown schema",
+      "snapshot": {
+        "schemaVersion": 2,
+        "bookmarks": [],
+        "tags": []
+      }
+    },
+    {
+      "name": "credentials cannot be imported",
+      "snapshot": {
+        "schemaVersion": 1,
+        "bookmarks": [],
+        "tags": [],
+        "githubToken": "forbidden"
+      }
+    },
+    {
+      "name": "null is not missing",
+      "snapshot": null
+    },
+    {
+      "name": "wrong title type",
+      "snapshot": {
+        "schemaVersion": 1,
+        "bookmarks": [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "url": "https://example.com/kept",
+            "title": 12,
+            "deleted": true,
+            "privateNote": "Private note",
+            "evidence": {
+              "description": "Captured description",
+              "bodyExcerpt": "Captured body"
+            },
+            "ai": {
+              "includeBody": false,
+              "skip": true
+            },
+            "fieldState": {
+              "deleted": {
+                "source": "manual",
+                "version": 2,
+                "protected": true
+              },
+              "privateNote": {
+                "source": "manual",
+                "version": 3,
+                "protected": true
+              }
+            },
+            "tagAssignments": {
+              "00000000-0000-4000-8000-000000000002": {
+                "state": "rejected",
+                "source": "manual",
+                "version": 4,
+                "protected": true
+              }
+            }
+          }
+        ],
+        "tags": [
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "canonicalName": "reading",
+            "definition": "Reading material",
+            "rules": {
+              "inclusion": "Read later",
+              "exclusion": "Not relevant",
+              "examples": "Articles"
+            },
+            "fieldState": {
+              "definition": {
+                "source": "manual",
+                "version": 2,
+                "protected": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "orphan assignment",
+      "snapshot": {
+        "schemaVersion": 1,
+        "bookmarks": [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "url": "https://example.com/kept",
+            "title": "Kept title",
+            "deleted": true,
+            "privateNote": "Private note",
+            "evidence": {
+              "description": "Captured description",
+              "bodyExcerpt": "Captured body"
+            },
+            "ai": {
+              "includeBody": false,
+              "skip": true
+            },
+            "fieldState": {
+              "deleted": {
+                "source": "manual",
+                "version": 2,
+                "protected": true
+              },
+              "privateNote": {
+                "source": "manual",
+                "version": 3,
+                "protected": true
+              }
+            },
+            "tagAssignments": {
+              "00000000-0000-4000-8000-000000000002": {
+                "state": "rejected",
+                "source": "manual",
+                "version": 4,
+                "protected": true
+              }
+            }
+          }
+        ],
+        "tags": []
+      }
+    },
+    {
+      "name": "deleted without version",
+      "snapshot": {
+        "schemaVersion": 1,
+        "bookmarks": [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "url": "https://example.com/kept",
+            "title": "Kept title",
+            "deleted": true,
+            "privateNote": "Private note",
+            "evidence": {
+              "description": "Captured description",
+              "bodyExcerpt": "Captured body"
+            },
+            "ai": {
+              "includeBody": false,
+              "skip": true
+            },
+            "fieldState": {},
+            "tagAssignments": {
+              "00000000-0000-4000-8000-000000000002": {
+                "state": "rejected",
+                "source": "manual",
+                "version": 4,
+                "protected": true
+              }
+            }
+          }
+        ],
+        "tags": [
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "canonicalName": "reading",
+            "definition": "Reading material",
+            "rules": {
+              "inclusion": "Read later",
+              "exclusion": "Not relevant",
+              "examples": "Articles"
+            },
+            "fieldState": {
+              "definition": {
+                "source": "manual",
+                "version": 2,
+                "protected": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "unsafe field version",
+      "snapshot": {
+        "schemaVersion": 1,
+        "bookmarks": [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "url": "https://example.com/kept",
+            "title": "Kept title",
+            "deleted": true,
+            "privateNote": "Private note",
+            "evidence": {
+              "description": "Captured description",
+              "bodyExcerpt": "Captured body"
+            },
+            "ai": {
+              "includeBody": false,
+              "skip": true
+            },
+            "fieldState": {
+              "deleted": {
+                "source": "manual",
+                "version": 9007199254740992,
+                "protected": true
+              }
+            },
+            "tagAssignments": {
+              "00000000-0000-4000-8000-000000000002": {
+                "state": "rejected",
+                "source": "manual",
+                "version": 4,
+                "protected": true
+              }
+            }
+          }
+        ],
+        "tags": [
+          {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "canonicalName": "reading",
+            "definition": "Reading material",
+            "rules": {
+              "inclusion": "Read later",
+              "exclusion": "Not relevant",
+              "examples": "Articles"
+            },
+            "fieldState": {
+              "definition": {
+                "source": "manual",
+                "version": 2,
+                "protected": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "publication policy without version",
+      "snapshot": {
+        "schemaVersion": 1,
+        "bookmarks": [],
+        "tags": [],
+        "publication": {
+          "mode": "allMinusExcluded",
+          "includedTagIds": [],
+          "excludedTagIds": [],
+          "fieldState": {}
+        }
+      }
+    },
+    {
+      "name": "manual public choice without version",
+      "snapshot": {
+        "schemaVersion": 1,
+        "bookmarks": [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "url": "https://example.com/",
+            "title": "Invalid manual decision",
+            "publicationChoice": "manualPublic"
+          }
+        ],
+        "tags": []
+      }
+    },
+    {
+      "name": "unknown publication field",
+      "snapshot": {
+        "schemaVersion": 1,
+        "bookmarks": [],
+        "tags": [],
+        "publication": {
+          "mode": "manualOnly",
+          "includedTagIds": [],
+          "excludedTagIds": [],
+          "fieldState": {},
+          "githubToken": "forbidden"
+        }
+      }
+    },
+    {
+      "name": "explicit null bookmark fieldState",
+      "snapshot": {
+        "schemaVersion": 1,
+        "bookmarks": [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "url": "https://example.com/legacy-absence",
+            "title": "Legacy absence",
+            "fieldState": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "explicit null bookmark tagAssignments",
+      "snapshot": {
+        "schemaVersion": 1,
+        "bookmarks": [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "url": "https://example.com/legacy-absence",
+            "title": "Legacy absence",
+            "tagAssignments": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "explicit null bookmark evidence",
+      "snapshot": {
+        "schemaVersion": 1,
+        "bookmarks": [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "url": "https://example.com/legacy-absence",
+            "title": "Legacy absence",
+            "evidence": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "explicit null bookmark ai",
+      "snapshot": {
+        "schemaVersion": 1,
+        "bookmarks": [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "url": "https://example.com/legacy-absence",
+            "title": "Legacy absence",
+            "ai": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "explicit null collection tags",
+      "snapshot": {
+        "schemaVersion": 1,
+        "bookmarks": [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "url": "https://example.com/legacy-absence",
+            "title": "Legacy absence"
+          }
+        ],
+        "tags": null
+      }
+    },
+    {
+      "name": "explicit null collection publication",
+      "snapshot": {
+        "schemaVersion": 1,
+        "bookmarks": [
+          {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "url": "https://example.com/legacy-absence",
+            "title": "Legacy absence"
+          }
+        ],
+        "publication": null
+      }
+    }
+  ]
+}

@@ -6,6 +6,7 @@ import { TagManager } from "./TagManager";
 import { BookmarkTags } from "./BookmarkTags";
 import { PublicationManager } from "./PublicationManager";
 import { BookmarkEditor } from "../../lib/BookmarkEditor";
+import { SyncPanel } from "./SyncPanel";
 import "../../style.css";
 
 function Collection() {
@@ -122,6 +123,7 @@ function Collection() {
       const snapshot = await collectionSnapshot(); setBookmarks(snapshot.bookmarks); setTags(snapshot.tags);
     }} onError={setError} onStatus={setStatus} />
     <TagManager tags={tags} onChange={async () => setTags(await listTags())} onError={setError} onStatus={setStatus} />
+    <SyncPanel onSynced={async () => { const snapshot = await collectionSnapshot(); setBookmarks(snapshot.bookmarks); setTags(snapshot.tags); }} />
   </main>;
 }
 

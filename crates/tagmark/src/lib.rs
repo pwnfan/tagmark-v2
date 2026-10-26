@@ -173,7 +173,7 @@ pub struct TagAssignment {
     pub protected: bool,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Collection {
     pub schema_version: u32,

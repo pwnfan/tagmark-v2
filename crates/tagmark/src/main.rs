@@ -3,6 +3,7 @@ use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use tagmark::{AssignmentState, BookmarkEdit, Collection, Result};
+mod sync;
 
 #[derive(Parser)]
 #[command(version, about = "Manage a private TagMark collection")]
@@ -15,6 +16,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Action {
+    /// Sync a private GitHub instance. Credential comes only from TAGMARK_GITHUB_TOKEN.
+    Sync {
+        #[arg(long)]
+        repository: String,
+    },
     /// Create a new, empty collection without replacing an existing file.
     Init,
     /// Save an HTTP(S) URL or return the bookmark already at that URL.
@@ -126,6 +132,7 @@ fn execute(cli: Cli) -> Result<()> {
     let mut collection: Collection = serde_json::from_reader(File::open(&cli.collection)?)?;
     collection.validate()?;
     match cli.command {
+        Action::Sync { repository } => sync::sync(&cli.collection, &collection, &repository)?,
         Action::Save { url, title } => {
             let result = collection.save(&url, &title)?;
             if result.created {

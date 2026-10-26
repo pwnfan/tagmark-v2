@@ -49,7 +49,7 @@ cargo run -- --collection collection.json tag-reject <bookmark-id> <tag-id>
 
 快照的 `tags` 和收藏的 `tagAssignments` 为版本 1 的新增字段；旧快照缺失时按空集合读取。人工版本号范围为 1 至 9,007,199,254,740,991，达到上限时拒绝修改，避免两端数字精度不一致。管理页下载的快照包含标签、规则及人工保护，CLI `tags`／`list` 可读取核对。这份本地快照是完整私有状态。
 
-在 Chrome 的扩展程序页面开启开发者模式，加载 `apps/extension/.output/chrome-mv3` 目录。收藏缓存保存在插件自己的 IndexedDB 中；当前开发阶段尚未接通 GitHub 同步。
+在 Chrome 的扩展程序页面开启开发者模式，加载 `apps/extension/.output/chrome-mv3` 目录。收藏缓存保存在插件自己的 IndexedDB 中，支持离线编辑和私有 GitHub 实例同步。管理页可配置限定仓库的令牌并选择仅会话或本机记住；CLI 从 `TAGMARK_GITHUB_TOKEN` 环境变量读取凭据，然后执行 `cargo run -- --collection collection.json sync --repository owner/repository`。初始化、权限、冲突处理和验收边界见[私有同步说明](docs/private-sync.md)。
 
 插件弹窗仅在点击保存时读取当前 HTTP(S) 页面的标题和简介；正文摘录默认关闭，启用时最多保存 20,000 字符，并排除表单、可编辑区、隐藏内容与脚本。简介最多 2,000 字符。页面限制读取时仍可保存网址和标题，并显示提示。管理页可离线修改标题、网址、私人备注和页面证据，保存正文开关及单条跳过 AI 的选择。重复收藏保留已有修改；网址碰撞报错且不合并。含用户名或密码的网址会被拒绝。
 

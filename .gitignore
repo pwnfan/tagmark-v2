@@ -7,3 +7,4 @@ test-results/
 playwright-report/
 /collection.json
 /collection.json.lock
+/collection.json.sync.json

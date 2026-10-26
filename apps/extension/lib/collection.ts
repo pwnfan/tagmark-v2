@@ -1,10 +1,10 @@
-import { setBookmarkDeleted, bookmarkWithDefaults, editBookmarkFields, createManualTag, editManualTag, normalizeBookmarkUrl, setManualTagAssignment,
+import { parseSnapshot, snapshotText, setBookmarkDeleted, bookmarkWithDefaults, editBookmarkFields, createManualTag, editManualTag, normalizeBookmarkUrl, setManualTagAssignment,
   defaultPublicationPolicy, editPublicationPolicy, setPublicationChoice, validatePublicationPolicy,
   type PublicationChoice, type PublicationEdit, type PublicationPolicy,
   type Bookmark, type BookmarkEdit, type CollectionSnapshot, type SaveResult, type Tag, type TagAssignment, type TagEdit } from "@tagmark/core";
 
 const database = new Promise<IDBDatabase>((resolve, reject) => {
-  const request = indexedDB.open("tagmark", 3);
+  const request = indexedDB.open("tagmark", 4);
   request.onupgradeneeded = () => {
     if (!request.result.objectStoreNames.contains("bookmarks")) {
       const bookmarks = request.result.createObjectStore("bookmarks", { keyPath: "id" });
@@ -15,6 +15,7 @@ const database = new Promise<IDBDatabase>((resolve, reject) => {
       tags.createIndex("canonicalName", "canonicalName", { unique: true });
     }
     if (!request.result.objectStoreNames.contains("settings")) request.result.createObjectStore("settings");
+    if (!request.result.objectStoreNames.contains("sync")) request.result.createObjectStore("sync");
   };
   request.onsuccess = () => {
     request.result.onversionchange = () => request.result.close();
@@ -23,6 +24,44 @@ const database = new Promise<IDBDatabase>((resolve, reject) => {
   request.onerror = () => reject(request.error);
   request.onblocked = () => reject(new Error("Close other TagMark pages, then try again"));
 });
+
+const changes = new BroadcastChannel("tagmark-collection");
+changes.onmessage = () => window.dispatchEvent(new Event("tagmark-changed"));
+function changed() { changes.postMessage(null); window.dispatchEvent(new Event("tagmark-changed")); }
+
+export interface SyncBaseline { repository: string; branch: string; head: string; snapshot: CollectionSnapshot }
+export async function syncBaseline(): Promise<SyncBaseline | undefined> {
+  const db = await database;
+  return new Promise((resolve, reject) => {
+    const request = db.transaction("sync").objectStore("sync").get("baseline");
+    request.onsuccess = () => resolve(request.result as SyncBaseline | undefined);
+    request.onerror = () => reject(new Error("Sync baseline could not be read"));
+  });
+}
+
+/** Atomically compare, replace if safe, and remember exactly the synchronized bytes. */
+export async function finishSync(expected: CollectionSnapshot, state: SyncBaseline): Promise<boolean> {
+  const next = parseSnapshot(state.snapshot);
+  const db = await database;
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(["bookmarks", "tags", "settings", "sync"], "readwrite");
+    let clean = false; let failure: unknown;
+    readSnapshot(transaction, (current) => {
+      clean = snapshotText(current) === snapshotText(expected);
+      const replacing = snapshotText(expected) !== snapshotText(next);
+      if (!clean && replacing) throw new Error("Local edits changed during sync; both versions are kept");
+      if (replacing) {
+        transaction.objectStore("bookmarks").clear(); transaction.objectStore("tags").clear();
+        for (const bookmark of next.bookmarks) transaction.objectStore("bookmarks").put(bookmark);
+        for (const tag of next.tags) transaction.objectStore("tags").put(tag);
+        transaction.objectStore("settings").put(next.publication, "publication");
+      }
+      transaction.objectStore("sync").put({ ...state, snapshot: next }, "baseline");
+    }, (error) => { failure = error; transaction.abort(); });
+    transaction.oncomplete = () => { changed(); resolve(clean); };
+    transaction.onabort = () => reject(failure ?? new Error("Synced snapshot was not applied"));
+  });
+}
 
 export async function listBookmarks(): Promise<Bookmark[]> {
   const db = await database;
@@ -53,7 +92,7 @@ export async function saveBookmark(inputUrl: string, title: string, captured?: P
         result = { bookmark, created: true };
       }
     };
-    transaction.oncomplete = () => resolve(result);
+    transaction.oncomplete = () => { changed(); resolve(result); };
     transaction.onabort = () => reject(transaction.error ?? new Error("Bookmark was not saved"));
     transaction.onerror = () => reject(transaction.error ?? new Error("Bookmark was not saved"));
   });
@@ -74,7 +113,7 @@ export async function createTag(name: string, definition: string, rules: Omit<Ta
   return new Promise((resolve, reject) => {
     const transaction = db.transaction("tags", "readwrite");
     transaction.objectStore("tags").add(tag);
-    transaction.oncomplete = () => resolve(tag);
+    transaction.oncomplete = () => { changed(); resolve(tag); };
     transaction.onabort = () => reject(transaction.error?.name === "ConstraintError"
       ? new Error(`Tag '${tag.canonicalName}' already exists`) : transaction.error ?? new Error("Tag was not saved"));
   });
@@ -95,7 +134,7 @@ export async function editTag(id: string, edit: TagEdit): Promise<Tag> {
         store.put(result);
       } catch (caught) { error = caught; transaction.abort(); }
     };
-    transaction.oncomplete = () => resolve(result);
+    transaction.oncomplete = () => { changed(); resolve(result); };
     transaction.onabort = () => reject(error ?? transaction.error ?? new Error("Tag was not saved"));
   });
 }
@@ -117,7 +156,7 @@ export async function assignTag(bookmarkId: string, tagId: string, state: TagAss
         bookmarks.put(result);
       };
     };
-    transaction.oncomplete = () => resolve(result);
+    transaction.oncomplete = () => { changed(); resolve(result); };
     transaction.onabort = () => reject(error ?? transaction.error ?? new Error("Tag decision was not saved"));
   });
 }
@@ -163,7 +202,7 @@ export async function savePublication(edit: PublicationEdit, choices: Record<str
         transaction.objectStore("bookmarks").put(setPublicationChoice(bookmark, choice));
       }
     }, (error) => { failure = error; transaction.abort(); });
-    transaction.oncomplete = () => resolve();
+    transaction.oncomplete = () => { changed(); resolve(); };
     transaction.onabort = () => reject(failure ?? transaction.error ?? new Error("Publication choices were not saved"));
   });
 }
@@ -192,7 +231,7 @@ export async function editBookmark(id: string, edit: BookmarkEdit): Promise<Book
         transaction.abort();
       }
     };
-    transaction.oncomplete = () => resolve(result);
+    transaction.oncomplete = () => { changed(); resolve(result); };
     transaction.onabort = () => reject(failure ?? transaction.error ?? new Error("Bookmark could not be edited"));
     transaction.onerror = () => reject(transaction.error ?? new Error("Bookmark could not be edited"));
   });
@@ -214,7 +253,7 @@ export async function changeBookmarkDeletion(id: string, deleted: boolean): Prom
         transaction.abort();
       }
     };
-    transaction.oncomplete = () => resolve();
+    transaction.oncomplete = () => { changed(); resolve(); };
     transaction.onabort = () => reject(failure ?? transaction.error ?? new Error("Bookmark could not be updated"));
     transaction.onerror = () => reject(transaction.error ?? new Error("Bookmark could not be updated"));
   });
